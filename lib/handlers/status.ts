@@ -1,4 +1,7 @@
-export async function handleStatusIntent(tenant, senderPhone) {
+import { supabaseAdmin } from "../db";
+import { sendWhatsAppMessage } from "@/lib/wa";
+
+export async function handleStatusIntent(tenant: {id : string}, senderPhone: {id: string}) {
   const { data: user } = await supabaseAdmin
     .from("users").select("id")
     .eq("tenant_id", tenant.id).eq("phone", senderPhone).single();
