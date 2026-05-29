@@ -1,3 +1,6 @@
+import { sendWhatsAppMessage, sendCatalogMessage } from "@/lib/wa";
+import { getActiveProducts } from "@/lib/db";
+
 export async function handleBrowseIntent(tenant, senderPhone, session) {
   const catalogId = process.env.META_CATALOG_ID;
 
