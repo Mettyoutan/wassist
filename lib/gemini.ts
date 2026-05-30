@@ -1,85 +1,80 @@
 import {
-    GoogleGenerativeAI,
-    GenerationConfig,
-    SchemaType,
-    HarmCategory,
-    HarmBlockThreshold,
-    SafetySetting
-} from "@google/generative-ai"
+  GoogleGenerativeAI,
+  SchemaType,
+  HarmCategory,
+  HarmBlockThreshold,
+  type SafetySetting,
+} from "@google/generative-ai";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
 const safetySettings: SafetySetting[] = [
   { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
   { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
 ];
 
-/**
- * Model untuk parsing dengan temperature 0.1 dan responseSchema
- */
+// Model 1: Parser — structured output untuk data finansial
+// responseSchema + temperature 0.1 = deterministik, tidak boleh kreatif
 export const parserModel = genAI.getGenerativeModel({
-    model: "gemini-3.1-flash-lite",
-    generationConfig: {
-        temperature: 0.1,
-        responseMimeType: "application/json",
-        responseSchema: {
+  model: "gemini-3.1-flash-lite",
+  systemInstruction: `Kamu adalah intent parser untuk toko online WhatsApp.
+
+INTENT (pilih tepat satu):
+- order_new     : customer ingin pesan produk baru
+- browse        : ingin lihat katalog / tanya produk apa saja
+- repeat_last   : ingin order ulang pesanan sebelumnya
+- order_status  : tanya status / tracking pesanan
+- modify_order  : ubah pesanan yang sedang berlangsung
+- cancel_order  : batalkan pesanan
+- low_confidence: pesan tidak jelas atau di luar konteks belanja
+
+ATURAN OUTPUT:
+- items: isi HANYA jika intent = order_new. Intent lain → array kosong [].
+- product_index: nomor urut produk dari daftar "PRODUK TERSEDIA" (1-based integer). Bukan nama, bukan UUID.
+- qty: angka positif. Integer untuk satuan (pcs), desimal untuk berat/volume (kg, L).
+- size: ukuran jika disebutkan (S/M/L/XL/XXL atau angka). Default "".
+- notes: catatan lain. Default "".
+- confidence: range 0.0-1.0. Jika < 0.70 → gunakan intent = low_confidence.
+- Handle typo, campur bahasa Indonesia-Inggris, partikel informal (dong, deh, nih, ya kak).`,
+  generationConfig: {
+    temperature: 0.1,
+    responseMimeType: "application/json",
+    responseSchema: {
+      type: SchemaType.OBJECT,
+      properties: {
+        intent: {
+          type: SchemaType.STRING,
+          format: "enum",
+          enum: ["order_new", "browse", "repeat_last", "order_status", "modify_order", "cancel_order", "low_confidence"],
+        },
+        items: {
+          type: SchemaType.ARRAY,
+          items: {
             type: SchemaType.OBJECT,
             properties: {
-                intent: {
-                    type: SchemaType.STRING,
-                    format: "enum",
-                    enum: ["order_new", "browse", "repeat_last", "order_status", "modify_order", "cancel_order", "low_confidence"]
-                },
-                items: {
-                    type: SchemaType.ARRAY,
-                    items: {
-                        type: SchemaType.OBJECT,
-                        properties: {
-                            product_name:   { type: SchemaType.STRING },
-                            qty:            { type: SchemaType.INTEGER },
-                            size:           { type: SchemaType.STRING },
-                            notes:          { type: SchemaType.STRING },
-                        },
-                        required: ["product_name", "qty"]
-                    }
-                },
-                confidence: { type: SchemaType.NUMBER }
+              product_index: { type: SchemaType.INTEGER },
+              qty:           { type: SchemaType.NUMBER },
+              size:          { type: SchemaType.STRING },
+              notes:         { type: SchemaType.STRING },
             },
-            required: ["intent", "confidence"]
+            required: ["product_index", "qty"],
+          },
         },
+        confidence: { type: SchemaType.NUMBER },
+      },
+      required: ["intent", "confidence"],
     },
-    systemInstruction: `Kamu adalah intent parser untuk toko online WhatsApp.
-    
-    INTENT (pilih tepat satu):
-    - order_new     : customer ingin pesan produk baru
-    - browse        : ingin lihat katalog / tanya produk apa saja
-    - repeat_last   : ingin order ulang pesanan sebelumnya
-    - order_status  : tanya status / tracking pesanan
-    - modify_order  : ubah pesanan yang sedang berlangsung
-    - cancel_order  : batalkan pesanan
-    - low_confidence: pesan tidak jelas atau di luar konteks belanja
+  },
+  safetySettings,
+});
 
-    ATURAN OUTPUT:
-    - items         : isi HANYA jika intent = order_new. Intent lain → array kosong [].
-                    Alasan: semantik "items" hanya valid untuk order baru.
-                    browse/order_status/repeat_last → handler lookup DB, tidak butuh items dari parser.
-                    modify_order/cancel_order → cut MVP, fallback ke low_confidence → handoff manual.
-    - product_name  : nama produk sesuai katalog. Abaikan ukuran saat mencocokkan nama.
-    - qty           : bilangan bulat positif (1, 2, 3). Tidak boleh desimal.
-    - size          : ukuran jika disebutkan (S/M/L/XL/XXL atau angka seperti 32/34). Default "".
-    - notes         : catatan lain (warna, motif, permintaan khusus). Default "".
-    - confidence    : range 0.0-1.0. Pesan ambigu atau di luar konteks belanja → turunkan confidence. Jika confidence < 0.70, gunakan intent = low_confidence.
-    - Handle typo, campur bahasa Indonesia-Inggris, partikel informal (dong, deh, nih, ya kak).
-    `,
-    safetySettings
-})
-
+// Model 2: Generator — free-form text untuk owner analytics
+// Tidak butuh schema, sedikit lebih kreatif untuk narasi bisnis
 export const generatorModel = genAI.getGenerativeModel({
-    model: "gemini-3.1-flash-lite",
-    generationConfig: {
-        temperature: 0.4,
-        maxOutputTokens: 500
-    },
-    systemInstruction: "",
-    safetySettings
-})
+  model: "gemini-3.1-flash-lite",
+  generationConfig: {
+    temperature: 0.4,
+    maxOutputTokens: 400,
+  },
+  safetySettings,
+});

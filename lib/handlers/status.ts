@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "../db";
-import { sendWhatsAppMessage } from "@/lib/wa";
+import { sendWhatsAppMessage } from "@/lib/whatsapp";
 
 export async function handleStatusIntent(tenant: {id : string}, senderPhone: {id: string}) {
   const { data: user } = await supabaseAdmin
