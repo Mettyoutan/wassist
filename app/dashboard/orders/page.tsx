@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 "use client";
 
 import OrderAccordion from "@/components/dashboard/OrderAccordion";
@@ -143,8 +142,3 @@ export default function OrderManagement() {
         </div>
     );
     }
-=======
-export default function OrdersPage() {
-  return null;
-}
->>>>>>> e27bfab813bfe200a0f5d6ab9587fe52db17e319
