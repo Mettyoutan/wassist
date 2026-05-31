@@ -87,8 +87,9 @@ wassist/
 │       │                                updateProductStock, setProductReorderPoint,
 │       │                                setProductActive, decrementProductStock
 │       ├── orders.ts                 ← createOrder, updateOrderMidtrans, updateOrderStatus,
-│       │                                getOrderByMidtransId, getLatestOrderByCustomer
-│       ├── users.ts                  ← upsertCustomer, getUserIdByPhone
+│       │                                getOrderByMidtransId, getLatestOrderByCustomer,
+│       │                                getOrderItemsByOrderId
+│       ├── users.ts                  ← upsertCustomer, getUserIdByPhone, getUserById
 │       ├── tenants.ts                ← getTenantByWaPhoneId, setStoreStatus
 │       ├── analytics.ts              ← queryRevenueData, RevenueData type, parsePeriod
 │       └── index.ts                  ← re-export semua → import dari @/server/db
@@ -104,7 +105,9 @@ wassist/
 │   │   ├── status.ts                 ← handleStatusIntent()
 │   │   ├── handoff.ts                ← handleHandoffIntent()
 │   │   ├── owner.ts                  ← handleOwnerCommand() dispatcher
-│   │   ├── order-new.ts              ← handleOrderIntent() — TODO: webhook belum connect
+│   │   ├── order-new.ts              ← handleOrderIntent() — slot-filling, guard toko tutup
+│   │   ├── clarification.ts          ← handleClarificationAnswer() — jawaban varian/qty
+│   │   ├── confirm-order.ts          ← processOrderConfirmation() — Midtrans QRIS + WA
 │   │   ├── cancel-order.ts           ← post-MVP
 │   │   ├── repeat-last.ts            ← post-MVP
 │   │   └── modify-order.ts           ← post-MVP
@@ -247,6 +250,7 @@ export type SessionState =
   | "idle"
   | "awaiting_confirmation"         // customer konfirmasi order
   | "awaiting_payment"              // customer sedang bayar QRIS
+  | "awaiting_clarification"        // bot nunggu jawaban klarifikasi (varian/qty)
   | "awaiting_owner_confirmation";  // owner konfirmasi mutasi
 
 export type PendingOwnerAction = {
@@ -259,11 +263,25 @@ export type PendingOwnerAction = {
   delta?:       number;  // perubahan relatif stok (±) — mutually exclusive dengan new_value
 };
 
+// Slot-filling: diisi saat bot nunggu customer pilih varian atau isi jumlah
+export type PendingClarification = {
+  kind:         "variant" | "quantity";
+  candidates:   Array<{ product_id: string; name: string; price: number; unit: string; stock: number }>;
+  qty?:         number;          // diketahui (kasus variant)
+  integer_only: boolean;         // unit diskret → qty harus bulat
+  max_stock?:   number;          // batas qty (kasus out-of-stock)
+  size:         string;
+  notes:        string;
+  resolved:     PendingOrderItem[]; // item sudah resolved sebelum klarifikasi ini
+  retry_count:  number;          // jawaban gagal; ≥2 → arahkan katalog
+};
+
 export type Session = {
   state:                  SessionState;
   pending_order?:         PendingOrder;
   current_order_id?:      string;
   pending_owner_action?:  PendingOwnerAction;
+  pending_clarification?: PendingClarification; // hanya saat awaiting_clarification
   retry_count:            number;
   last_updated:           number;  // Date.now() — TTL 30 menit
 };
@@ -272,8 +290,9 @@ export type Session = {
 ### Urutan Check di Webhook (JANGAN DIUBAH)
 ```
 1. State machine check DULU — sebelum Gemini
-   awaiting_confirmation → cek CONFIRM/CANCEL keywords
-   awaiting_payment      → resend payment reminder
+   awaiting_confirmation  → cek CONFIRM/CANCEL keywords → processOrderConfirmation
+   awaiting_clarification → cek CANCEL → handleClarificationAnswer
+   awaiting_payment       → resend payment reminder
 2. Owner vs Customer check (tenant.owner_phone === senderPhone)
 3. Owner → handleOwnerCommand() (punya state machine sendiri)
 4. Customer → parseCustomerMessage() → intent router
@@ -294,17 +313,16 @@ CANCEL_KEYWORDS.has(normalized)   // "batal", "tidak", "gak", "cancel", dll
 - Snap: return `redirect_url` → customer harus buka browser
 - Core API: return `qr_string` → PNG → kirim langsung di WA
 
-### Alur `processOrderConfirmation()` (di `lib/midtrans.ts` — TODO)
+### Alur `processOrderConfirmation()` (di `lib/handlers/confirm-order.ts` — ✅ DONE)
 ```
-1. upsertCustomer()               → userId          (dari @/server/db)
+1. getUserIdByPhone()             → userId
 2. createOrder(tenantId, userId, items, total) → orderId
-3. coreApi.charge({ payment_type: "qris" })   → qr_string
-4. updateOrderMidtrans(orderId, ...)
-5. generateQrisImage(qr_string)   → PNG Buffer
-6. uploadWhatsAppMedia(buffer)    → media_id
-7. sendWhatsAppImageMessage(...)  → [try/catch: fallback ke text URL]
-8. sendWhatsAppMessage(owner_phone, notif)
-9. clearSession()
+3. createQrisPayment({ totalAmount, customerPhone }) → { midtransId, paymentUrl, qrImageUrl }
+4. updateOrderMidtrans(orderId, midtransId, paymentUrl)
+5. fetch(qrImageUrl) → Buffer → uploadWhatsAppMedia → media_id
+6. sendWhatsAppImageMessage(...)  → [try/catch: fallback ke paymentLinkMessage]
+7. sendWhatsAppMessage(owner_phone, notif)
+8. setSession → awaiting_payment + current_order_id
 ```
 
 ### Midtrans Callback (`app/api/webhook/midtrans/route.ts`)
@@ -354,7 +372,9 @@ const product = await getProductByRetailerId(tenant.id, cartItem.product_retaile
 | order_status | ✅ | `lib/handlers/status.ts` |
 | handoff | ✅ | `lib/handlers/handoff.ts` |
 | Owner commands (11 action) | ✅ | `lib/handlers/owner.ts` |
-| order_new (teks natural) | ⚠️ Handler ada, webhook belum connect | `lib/handlers/order-new.ts` |
+| order_new + slot-filling klarifikasi | ✅ | `lib/handlers/order-new.ts`, `lib/handlers/clarification.ts` |
+| Payment QRIS end-to-end | ✅ | `lib/handlers/confirm-order.ts`, `lib/midtrans.ts` |
+| Midtrans callback webhook | ✅ | `app/api/webhook/midtrans/route.ts` |
 | cancel_order | ❌ Cut → low_confidence | post-MVP |
 | repeat_last | ❌ Cut → low_confidence | post-MVP |
 | modify_order | ❌ Cut → low_confidence | post-MVP |
