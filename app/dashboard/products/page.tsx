@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import StockNotification from "@/components/dashboard/StockNotification";
 
 const dummyStock = [
@@ -29,3 +30,8 @@ export default function StockManagement(){
         <StockNotification items={dummyStock} />
     )
 }
+=======
+export default function ProductsPage() {
+  return null;
+}
+>>>>>>> e27bfab813bfe200a0f5d6ab9587fe52db17e319
