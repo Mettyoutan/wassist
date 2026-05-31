@@ -13,12 +13,3 @@ body {
   background-color: var(--bg-light);
   font-family: 'Segoe UI', sans-serif;
 }
-
-/* Mobile wrapper */
-.mobile-wrapper {
-  max-width: 430px;
-  margin: 0 auto;
-  min-height: 100vh;
-  background: white;
-  box-shadow: 0 0 20px rgba(0,0,0,0.1);
-}
