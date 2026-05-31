@@ -1,7 +1,7 @@
 import { sendWhatsAppMessage, sendCatalogMessage } from "@/lib/whatsapp";
-import { getActiveProducts } from "@/lib/db";
+import { getActiveProducts } from "@/server/db";
 
-export async function handleBrowseIntent(tenant, senderPhone, session) {
+export async function handleBrowseIntent(tenant: { id: string }, senderPhone: string, _session?: unknown) {
   const catalogId = process.env.META_CATALOG_ID; 
 
   if (catalogId) {

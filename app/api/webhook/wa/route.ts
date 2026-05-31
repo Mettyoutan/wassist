@@ -1,14 +1,19 @@
 import { NextRequest, NextResponse }    from "next/server";
-import { supabaseAdmin, getActiveProducts } from "@/lib/db";
+import { getTenantByWaPhoneId,
+         upsertCustomer,
+         getActiveProducts }             from "@/server/db";
 import { getSession,
          clearSession }                  from "@/lib/session";
-import { parseCustomerMessage }          from "@/lib/intent-parser";
+import { parseCustomerMessage }          from "@/lib/ai/customer-parser";
 import { sendWhatsAppMessage }           from "@/lib/whatsapp";
 import { CONFIRM_KEYWORDS,
          CANCEL_KEYWORDS }               from "@/lib/constants/confirmation-keywords";
 import { handleBrowseIntent }            from "@/lib/handlers/browse";
 import { handleStatusIntent }            from "@/lib/handlers/status";
 import { handleHandoffIntent }           from "@/lib/handlers/handoff";
+import { handleOrderIntent }            from "@/lib/handlers/order-new";
+import { handleClarificationAnswer }   from "@/lib/handlers/clarification";
+import { processOrderConfirmation }    from "@/lib/handlers/confirm-order";
 import { handleCartOrder }               from "@/lib/handlers/cart-order";
 import { handleOwnerCommand }            from "@/lib/handlers/owner";
 import type { DbTenant }                 from "@/lib/types/db";
@@ -45,26 +50,15 @@ export async function POST(request: NextRequest) {
     const senderPhone: string   = message.from;
 
     // ── Lookup tenant ────────────────────────────────────────────────────────
-    const { data: tenantRaw } = await supabaseAdmin
-      .from("tenants")
-      .select("*")
-      .eq("wa_business_phone_id", phoneNumberId)
-      .eq("status", "ACTIVE")
-      .single();
+    const tenant = await getTenantByWaPhoneId(phoneNumberId);
 
-    if (!tenantRaw) {
+    if (!tenant) {
       console.warn("[Webhook] Tenant not found:", phoneNumberId);
       return NextResponse.json({ status: "ok" });
     }
-    const tenant = tenantRaw as DbTenant;
 
     // ── Upsert customer ──────────────────────────────────────────────────────
-    await supabaseAdmin
-      .from("users")
-      .upsert(
-        { tenant_id: tenant.id, phone: senderPhone, name: senderPhone, role: "CUSTOMER" },
-        { onConflict: "tenant_id,phone" }
-      );
+    await upsertCustomer(tenant.id, senderPhone);
 
     // ── Cart order dari WA Catalog (tidak butuh state check atau Gemini) ─────
     if (message.type === "order") {
@@ -90,9 +84,7 @@ export async function POST(request: NextRequest) {
       const normalized = msgText.toLowerCase().trim();
 
       if (CONFIRM_KEYWORDS.has(normalized)) {
-        // TODO: implementasi processOrderConfirmation (lib/handlers/order.ts)
-        // Sementara: acknowledge dulu, handler akan diimplementasi terpisah
-        await sendWhatsAppMessage(senderPhone, "Memproses pesananmu ya kak... ⏳");
+        await processOrderConfirmation(tenant, senderPhone, session);
         return NextResponse.json({ status: "ok" });
       }
 
@@ -113,6 +105,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ status: "ok" });
     }
 
+    if (session.state === "awaiting_clarification") {
+      const normalized = msgText.toLowerCase().trim();
+      if (CANCEL_KEYWORDS.has(normalized)) {
+        clearSession(tenant.id, senderPhone);
+        await sendWhatsAppMessage(senderPhone, "Pesanan dibatalkan ya kak 👍 Ketik *menu* untuk lihat katalog.");
+        return NextResponse.json({ status: "ok" });
+      }
+      await handleClarificationAnswer(tenant, senderPhone, msgText, session);
+      return NextResponse.json({ status: "ok" });
+    }
+
     if (session.state === "awaiting_payment") {
       await sendWhatsAppMessage(
         senderPhone,
@@ -123,7 +126,7 @@ export async function POST(request: NextRequest) {
 
     // ── OWNER vs CUSTOMER ────────────────────────────────────────────────────
     if (tenant.owner_phone === senderPhone) {
-      await handleOwnerCommand(tenant, senderPhone, msgText);
+      await handleOwnerCommand(tenant, senderPhone, msgText, session);
       return NextResponse.json({ status: "ok" });
     }
 
@@ -142,9 +145,7 @@ export async function POST(request: NextRequest) {
         break;
 
       case "order_new":
-        // TODO: implementasi handleOrderIntent (lib/handlers/order.ts)
-        // Sementara: fallback ke handoff agar tidak silent fail
-        await handleHandoffIntent(tenant, senderPhone);
+        await handleOrderIntent(tenant, senderPhone, products, parsed.items);
         break;
 
       case "order_status":

@@ -1,11 +1,12 @@
 import { z } from "zod";
-import { parserModel } from "./gemini";
+import { customerParserModel } from "./models";
 
 const OrderItemSchema = z.object({
-  product_index: z.number().int().min(1),
-  qty:           z.number().positive(),
-  size:          z.string().optional().default(""),
-  notes:         z.string().default(""),
+  product_index:     z.number().int().min(1),
+  qty:               z.number().positive().optional(),
+  candidate_indices: z.array(z.number().int().min(1)).optional().default([]),
+  size:              z.string().optional().default(""),
+  notes:             z.string().default(""),
 });
 
 export const ParsedIntentSchema = z.object({
@@ -61,7 +62,7 @@ export async function parseCustomerMessage(
 ): Promise<ParsedIntent> {
   try {
     const prompt  = buildCustomerIntentPrompt(message, products, context);
-    const result  = await parserModel.generateContent(prompt);
+    const result  = await customerParserModel.generateContent(prompt);
     const rawText = result.response.text();
     const rawJson = JSON.parse(rawText);
     const parsed  = ParsedIntentSchema.parse(rawJson);

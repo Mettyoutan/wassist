@@ -1,22 +1,15 @@
-import { supabaseAdmin } from "../db";
+import { getUserIdByPhone, getLatestOrderByCustomer } from "@/server/db";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
 
-export async function handleStatusIntent(tenant: {id : string}, senderPhone: {id: string}) {
-  const { data: user } = await supabaseAdmin
-    .from("users").select("id")
-    .eq("tenant_id", tenant.id).eq("phone", senderPhone).single();
+export async function handleStatusIntent(tenant: { id: string }, senderPhone: string) {
+  const userId = await getUserIdByPhone(tenant.id, senderPhone);
 
-  if (!user) {
+  if (!userId) {
     await sendWhatsAppMessage(senderPhone, "Kamu belum punya pesanan. Ketik *menu* untuk melihat katalog kami 😊");
     return;
   }
 
-  const { data: order } = await supabaseAdmin
-    .from("orders").select("*")
-    .eq("tenant_id", tenant.id)
-    .eq("customer_user_id", user.id)
-    .order("created_at", { ascending: false })
-    .limit(1).single();
+  const order = await getLatestOrderByCustomer(tenant.id, userId);
 
   const statusMessages: Record<string, string> = {
     PENDING: "Pesananmu masih menunggu konfirmasi 🕐",

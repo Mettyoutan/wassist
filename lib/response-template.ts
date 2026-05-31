@@ -39,6 +39,36 @@ export function paymentSuccessMessage(orderId: string): string {
   Nanti kami kabari kalau sudah dikirim!`;
 }
 
+export function storeClosedMessage(closedUntil?: string | null): string {
+  const until = closedUntil ? ` hingga ${closedUntil}` : "";
+  return `Maaf kak, toko kami sedang tutup${until} 🙏 Silakan order lagi nanti ya!`;
+}
+
+export function variantClarificationMessage(
+  candidates: Array<{ name: string; price: number; unit: string }>,
+  qty?: number
+): string {
+  const qtyLabel = qty !== undefined ? ` (${qty}x)` : "";
+  const list = candidates
+    .map((c, i) => `${i + 1}. ${c.name}${qtyLabel} — Rp${c.price.toLocaleString("id-ID")}/${c.unit}`)
+    .join("\n");
+  return `Ada beberapa varian kak, yang mana? 😊\n\n${list}\n\nBalas nomornya ya!`;
+}
+
+export function quantityClarificationMessage(
+  name: string,
+  unit: string,
+  opts: { integerOnly?: boolean; maxStock?: number }
+): string {
+  if (opts.maxStock !== undefined) {
+    return `Stok *${name}* tinggal *${opts.maxStock} ${unit}* kak 😊 Mau berapa?`;
+  }
+  if (opts.integerOnly) {
+    return `Berapa *${name}* yang mau dipesan kak? (masukkan angka bulat ya, contoh: 2)`;
+  }
+  return `Berapa *${name}* yang mau dipesan kak?`;
+}
+
 // Status order
 export const statusMessages: Record<string, string> = {
   PENDING:           "Pesananmu masih menunggu konfirmasi ya kak 🕐",
