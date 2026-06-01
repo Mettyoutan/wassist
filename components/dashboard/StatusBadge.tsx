@@ -1,13 +1,12 @@
-type Status = 'diproses' | 'pending' | 'lunas' | 'selesai'
+type Status = 'pending' | 'diproses' | 'selesai'
 
 interface StatusBadgeProps {
   status: Status
 }
 
 const statusConfig: Record<Status, { label: string; className: string }> = {
-  diproses: { label: 'Diproses', className: 'bg-warning text-dark' },
   pending:  { label: 'Pending',  className: 'bg-secondary text-white' },
-  lunas:    { label: 'Lunas',    className: 'bg-success text-white' },
+  diproses: { label: 'Diproses', className: 'bg-warning text-dark' },
   selesai:  { label: 'Selesai',  className: 'bg-primary text-white' },
 }
 
