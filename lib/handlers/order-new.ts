@@ -4,6 +4,7 @@ import { setSession }                               from "@/lib/session";
 import { handleBrowseIntent }                       from "@/lib/handlers/browse";
 import {
   orderConfirmationMessage,
+  itemsNotFoundMessage,
   storeClosedMessage,
   variantClarificationMessage,
   quantityClarificationMessage,
@@ -27,7 +28,7 @@ type ItemClassification =
   | { kind: "missing_qty";  candidate: ClarificationCandidate; size: string; notes: string }
   | { kind: "invalid_qty";  candidate: ClarificationCandidate; qty: number; size: string; notes: string }
   | { kind: "out_of_stock"; candidate: ClarificationCandidate; qty: number; size: string; notes: string }
-  | { kind: "not_found" };
+  | { kind: "not_found";    name?: string };
 
 async function classifyItem(
   tenantId:   string,
@@ -57,7 +58,7 @@ async function classifyItem(
   if (!cached) return { kind: "not_found" };
 
   const db = await getProductByName(tenantId, cached.name);
-  if (!db) return { kind: "not_found" };
+  if (!db) return { kind: "not_found", name: cached.name };
 
   const candidate: ClarificationCandidate = {
     product_id: db.id, name: cached.name, price: db.price, unit: db.unit, stock: db.stock,
@@ -126,6 +127,7 @@ export async function handleOrderIntent(
   const dedupedItems = Array.from(merged.values());
 
   const resolvedItems: PendingOrderItem[] = [];
+  const notFoundNames: string[] = [];
   let clarification: PendingClarification | null = null;
 
   for (const parsedItem of dedupedItems) {
@@ -137,6 +139,7 @@ export async function handleOrderIntent(
         break;
 
       case "not_found":
+        if (result.name) notFoundNames.push(result.name);
         break;
 
       case "ambiguous":
@@ -221,12 +224,18 @@ export async function handleOrderIntent(
   }
 
   if (resolvedItems.length === 0) {
+    if (notFoundNames.length > 0) {
+      await sendWhatsAppMessage(senderPhone, itemsNotFoundMessage(notFoundNames));
+    }
     await handleBrowseIntent(tenant, senderPhone);
     return;
   }
 
   const total = resolvedItems.reduce((sum, i) => sum + i.subtotal, 0);
-  await sendWhatsAppMessage(senderPhone, orderConfirmationMessage(resolvedItems, total));
+  await sendWhatsAppMessage(
+    senderPhone,
+    orderConfirmationMessage(resolvedItems, total, notFoundNames.length > 0 ? notFoundNames : undefined)
+  );
   setSession(tenant.id, senderPhone, {
     state:         "awaiting_confirmation",
     pending_order: { items: resolvedItems, total },

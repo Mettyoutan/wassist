@@ -12,7 +12,8 @@ const OrderItemSchema = z.object({
 export const ParsedIntentSchema = z.object({
   intent: z.enum([
     "order_new", "browse", "repeat_last",
-    "modify_order", "cancel_order", "order_status", "low_confidence",
+    "modify_order", "cancel_order", "order_status",
+    "greeting", "low_confidence",
   ]),
   items:      z.array(OrderItemSchema).default([]),
   confidence: z.number().min(0).max(1),

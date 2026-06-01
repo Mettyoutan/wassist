@@ -92,6 +92,22 @@ export async function setProductActive(productId: string, isActive: boolean): Pr
   if (error) throw new Error(`[DB] setProductActive: ${error.message}`);
 }
 
+// Fetch produk untuk dashboard — includes stock, reorder_point, image_url.
+// BERBEDA dari getActiveProducts yang hanya return name/price/unit untuk Gemini prompt.
+export async function getProductsForDashboard(
+  tenantId: string
+): Promise<Pick<DbProduct, "id" | "name" | "price" | "unit" | "stock" | "reorder_point" | "image_url">[]> {
+  const { data, error } = await supabaseAdmin
+    .from("products")
+    .select("id, name, price, unit, stock, reorder_point, image_url")
+    .eq("tenant_id", tenantId)
+    .eq("is_active", true)
+    .order("name", { ascending: true });
+
+  if (error) console.error("[DB] getProductsForDashboard:", error.message);
+  return (data ?? []) as Pick<DbProduct, "id" | "name" | "price" | "unit" | "stock" | "reorder_point" | "image_url">[];
+}
+
 // Supabase JS tidak support atomic decrement → fetch + update (acceptable untuk hackathon).
 export async function decrementProductStock(productId: string, qty: number): Promise<void> {
   const { data: prod, error: fetchErr } = await supabaseAdmin

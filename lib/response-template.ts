@@ -3,7 +3,8 @@
 
 export function orderConfirmationMessage(
     items: Array<{ name: string; qty: number; size?: string; subtotal: number }>,
-    total: number
+    total: number,
+    notFoundNames?: string[]
 ): string {
     const itemLines = items
         .map(i => {
@@ -12,14 +13,17 @@ export function orderConfirmationMessage(
         })
         .join("\n");
 
-    return `Oke kak! Ini pesanannya ya:
-    
-    ${itemLines}
-    
-    *Total: Rp${total.toLocaleString("id-ID")}*
-    
-    Mau lanjut bayar? Balas *ya* atau *batal* 😊`;
+    const notFoundNote = notFoundNames && notFoundNames.length > 0
+        ? `\n\n_Produk tidak tersedia: ${notFoundNames.join(", ")}_`
+        : "";
+
+    return `Oke kak! Ini pesanannya ya:\n\n${itemLines}\n\n*Total: Rp${total.toLocaleString("id-ID")}*${notFoundNote}\n\nMau lanjut bayar? Balas *ya* atau *batal* 😊`;
 };
+
+export function itemsNotFoundMessage(names: string[]): string {
+    const list = names.map(n => `• ${n}`).join("\n");
+    return `Maaf kak, produk berikut tidak tersedia di toko kami:\n${list}\n\nMau lihat koleksi kami? 😊`;
+}
 
 
 export function paymentLinkMessage(total: number, url: string): string {
@@ -67,6 +71,10 @@ export function quantityClarificationMessage(
     return `Berapa *${name}* yang mau dipesan kak? (masukkan angka bulat ya, contoh: 2)`;
   }
   return `Berapa *${name}* yang mau dipesan kak?`;
+}
+
+export function greetingMessage(storeName: string): string {
+  return `Halo kak! Selamat datang di *${storeName}* 👋\n\nAda yang bisa kami bantu?\n• Ketik *menu* untuk lihat katalog\n• Atau langsung sebutkan pesananmu 😊`;
 }
 
 // Status order

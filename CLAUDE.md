@@ -1,5 +1,5 @@
 # CLAUDE.md — WAssist Project Context
-> Last updated: 31 Mei 2026
+> Last updated: 1 Juni 2026
 
 ---
 
@@ -7,8 +7,20 @@
 
 WAssist adalah platform otomasi pemesanan berbasis WhatsApp untuk UMKM Indonesia.
 Customer chat ke nomor WA bisnis → bot AI (Gemini) proses pesanan → generate QRIS → notif owner.
-**Hackathon:** Gunadarma Code Week 2.0, deadline submit 5 Juli 2026 malam.
-**Demo tenant:** Olshop Kak Nina (fashion store, 15 produk, `tenant_id: 00000000-0000-0000-0000-000000000001`).
+**Hackathon:** Gunadarma Code Week 2.0, deadline submit **11 Juni 2026**. Target WAssist selesai: **8 Juni 2026** (buffer 3 hari).
+**Demo tenant:** Toko Olshop Mbak Rina (fashion store, 16 produk, `tenant_id: 3b0a38de-811c-40b5-af83-c866e198da12`, `owner_phone: +6285196133302`).
+
+---
+
+## Dashboard Auth Strategy
+
+**Opsi A — AKTIF sekarang (hackathon demo mode)**
+Semua API route `/api/dashboard/*`, `/api/orders`, `/api/products` membaca `process.env.DEMO_TENANT_ID` langsung. Tidak ada JWT, tidak ada login. Cukup untuk demo single-tenant.
+
+**Opsi B — TODO post-hackathon**
+Magic link auth via `jose` JWT. File stub sudah ada: `app/api/auth/magic-link/route.ts` (returns 501).
+Alur: `POST /api/auth/magic-link` → kirim WA link ke owner → owner buka link → set JWT cookie → dashboard terautentikasi.
+Jangan hapus `JWT_SECRET` dari `.env.local`.
 
 ---
 
@@ -46,6 +58,7 @@ GEMINI_API_KEY=AIzaSy...
 NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJxxx
 SUPABASE_SERVICE_ROLE_KEY=eyJxxx        # JANGAN expose ke frontend
+NEXT_PUBLIC_STORAGE_BUCKET=product-images  # Supabase Storage bucket (harus public)
 
 # Midtrans Sandbox
 MIDTRANS_SERVER_KEY=SB-Mid-server-xxx
@@ -55,6 +68,9 @@ MIDTRANS_IS_PRODUCTION=false
 # Auth
 JWT_SECRET=random-secret-min-32-chars
 NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+# Dashboard Auth (Opsi A — Demo Mode)
+DEMO_TENANT_ID=3b0a38de-811c-40b5-af83-c866e198da12  # tenant demo Mbak Rina
 ```
 
 ---
@@ -73,8 +89,8 @@ wassist/
 │   │   │   └── [id]/route.ts         ← GET detail order
 │   │   ├── products/route.ts
 │   │   └── dashboard/
-│   │       ├── kpi/routes.ts         ← omzet, order count, AOV
-│   │       └── handoff/routes.ts     ← list percakapan needs manual reply
+│   │       ├── kpi/route.ts          ← omzet, order count, AOV
+│   │       └── handoff/route.ts      ← list percakapan needs manual reply (stub [])
 │   ├── dashboard/                    ← React UI untuk owner
 │   └── ...
 ├── components/
@@ -196,16 +212,22 @@ export type DbOrder = Omit<Tables<"orders">, "status" | "payment_status"> & {
 
 > ⚠️ Verifikasi nama model di https://aistudio.google.com SEBELUM coding. String `gemini-3.1-flash-lite` valid per Mei 2026.
 
-### Customer Intent — 7 Intent (`lib/ai/customer-parser.ts`)
+### Customer Intent — 8 Intent (`lib/ai/customer-parser.ts`)
 ```
 order_new       → customer ingin pesan produk baru
 browse          → ingin lihat katalog
 order_status    → tanya status pesanan
+greeting        → sapaan tanpa intent belanja → template sambutan
 repeat_last     → post-MVP → low_confidence
 modify_order    → post-MVP → low_confidence
 cancel_order    → post-MVP → low_confidence
 low_confidence  → tidak jelas / di luar konteks → handoff ke owner
 ```
+
+> ⚠️ Perubahan intent WAJIB update 3 tempat sekaligus:
+> 1. `lib/ai/models.ts` — `systemInstruction` + `responseSchema.enum`
+> 2. `lib/ai/customer-parser.ts` — `ParsedIntentSchema` Zod enum
+> 3. `app/api/webhook/wa/route.ts` — `case` baru di switch
 
 ### Owner Command — 11 Action (`lib/owner/parser.ts`)
 ```
@@ -370,6 +392,7 @@ const product = await getProductByRetailerId(tenant.id, cartItem.product_retaile
 | Cart dari WA Catalog | ✅ | `lib/handlers/cart-order.ts` |
 | browse | ✅ | `lib/handlers/browse.ts` |
 | order_status | ✅ | `lib/handlers/status.ts` |
+| greeting | ✅ | `lib/response-template.ts` → `greetingMessage()` |
 | handoff | ✅ | `lib/handlers/handoff.ts` |
 | Owner commands (11 action) | ✅ | `lib/handlers/owner.ts` |
 | order_new + slot-filling klarifikasi | ✅ | `lib/handlers/order-new.ts`, `lib/handlers/clarification.ts` |
@@ -399,6 +422,7 @@ const product = await getProductByRetailerId(tenant.id, cartItem.product_retaile
 ❌ ORDER BY random di getActiveProducts → wajib ORDER BY name ASC
 ❌ NEXT_PUBLIC_SUPABASE_URL dengan trailing /rest/v1/ → hanya base URL
 ❌ META_PHONE_NUMBER_ID berisi nomor HP → isi Meta Phone Number ID dari dashboard
+❌ Update intent di customer-parser.ts saja → WAJIB update models.ts (systemInstruction + enum) sekaligus
 ```
 
 ---

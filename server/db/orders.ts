@@ -127,3 +127,65 @@ export async function getOrderByMidtransId(midtransId: string): Promise<DbOrder 
   }
   return data as DbOrder;
 }
+
+// ─── Dashboard ────────────────────────────────────────────────────────────────
+
+export type OrderWithDetails = {
+  id: string;
+  midtrans_id: string | null;
+  status: DbOrder["status"];
+  payment_status: DbOrder["payment_status"];
+  total_amount: number;
+  created_at: string;
+  customer_phone: string;
+  items: Array<{
+    qty: number;
+    price_at_order: number;
+    unit: string;
+    product_name: string;
+  }>;
+};
+
+// List orders untuk dashboard owner — join customer phone + order items + product names.
+// Opsi A auth: caller menyediakan tenantId dari DEMO_TENANT_ID.
+export async function getOrdersByTenant(
+  tenantId: string,
+  statusFilter?: DbOrder["status"][]
+): Promise<OrderWithDetails[]> {
+  let query = supabaseAdmin
+    .from("orders")
+    .select(`
+      id, midtrans_id, status, payment_status, total_amount, created_at,
+      users!orders_customer_user_id_fkey(phone),
+      order_items(qty, price_at_order, unit, products(name))
+    `)
+    .eq("tenant_id", tenantId)
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  if (statusFilter && statusFilter.length > 0) {
+    query = query.in("status", statusFilter);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    console.error("[DB] getOrdersByTenant:", error.message);
+    return [];
+  }
+
+  return ((data ?? []) as any[]).map((row) => ({
+    id:             row.id,
+    midtrans_id:    row.midtrans_id ?? null,
+    status:         row.status as DbOrder["status"],
+    payment_status: row.payment_status as DbOrder["payment_status"],
+    total_amount:   row.total_amount,
+    created_at:     row.created_at,
+    customer_phone: row.users?.phone ?? "",
+    items: ((row.order_items ?? []) as any[]).map((oi: any) => ({
+      qty:            oi.qty,
+      price_at_order: oi.price_at_order,
+      unit:           oi.unit,
+      product_name:   oi.products?.name ?? "",
+    })),
+  }));
+}

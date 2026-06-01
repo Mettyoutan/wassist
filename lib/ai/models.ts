@@ -26,6 +26,7 @@ INTENT (pilih tepat satu):
 - order_status  : tanya status / tracking pesanan
 - modify_order  : ubah pesanan yang sedang berlangsung
 - cancel_order  : batalkan pesanan
+- greeting      : sapaan atau pesan pembuka tanpa intent belanja (halo, hi, selamat pagi, dll)
 - low_confidence: pesan tidak jelas atau di luar konteks belanja
 
 ATURAN OUTPUT:
@@ -47,7 +48,7 @@ ATURAN OUTPUT:
         intent: {
           type: SchemaType.STRING,
           format: "enum",
-          enum: ["order_new", "browse", "repeat_last", "order_status", "modify_order", "cancel_order", "low_confidence"],
+          enum: ["order_new", "browse", "repeat_last", "order_status", "modify_order", "cancel_order", "greeting", "low_confidence"],
         },
         items: {
           type: SchemaType.ARRAY,
@@ -95,7 +96,7 @@ ATURAN OUTPUT:
 - delta: perubahan RELATIF stok (positif=tambah, negatif=kurangi). Gunakan jika owner sebut perubahan ("tambah 5", "kurangin 3").
   Jangan isi keduanya sekaligus.
 - period: "hari ini" / "minggu" / "bulan" — hanya untuk get_revenue. Default "hari ini" jika tidak disebut.
-- confidence: 0.0–1.0. Jika < 0.70 → action = unknown.`,
+- confidence: range of 0.0-1.0. Jika < 0.70 → action = unknown.`,
   generationConfig: {
     temperature: 0.1,
     responseMimeType: "application/json",

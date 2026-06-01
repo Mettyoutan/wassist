@@ -8,6 +8,7 @@ import { parseCustomerMessage }          from "@/lib/ai/customer-parser";
 import { sendWhatsAppMessage }           from "@/lib/whatsapp";
 import { CONFIRM_KEYWORDS,
          CANCEL_KEYWORDS }               from "@/lib/constants/confirmation-keywords";
+import { greetingMessage }               from "@/lib/response-template";
 import { handleBrowseIntent }            from "@/lib/handlers/browse";
 import { handleStatusIntent }            from "@/lib/handlers/status";
 import { handleHandoffIntent }           from "@/lib/handlers/handoff";
@@ -140,6 +141,10 @@ export async function POST(request: NextRequest) {
 
     // ── INTENT ROUTER ────────────────────────────────────────────────────────
     switch (parsed.intent) {
+      case "greeting":
+        await sendWhatsAppMessage(senderPhone, greetingMessage(tenant.name));
+        break;
+
       case "browse":
         await handleBrowseIntent(tenant, senderPhone, session);
         break;

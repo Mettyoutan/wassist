@@ -1,37 +1,30 @@
-<<<<<<< HEAD
 import StockNotification from "@/components/dashboard/StockNotification";
+import { getProductsForDashboard, queryRevenueData } from "@/server/db";
 
-const dummyStock = [
-  {
-    name: "Ayam Penyet",
-    stock: 3,
-    soldToday: 22,
-    image: "/ayam_penyet.png",
-    status: "menipis" as const,
-  },
-  {
-    name: "Es Teh Manis",
-    stock: 0,
-    soldToday: 55,
-    image: "/es_teh_manis.png",
-    status: "habis" as const,
-  },
-  {
-    name: "Tahu Goreng",
-    stock: 6,
-    soldToday: 0,
-    image: "/tahu_goreng.png",
-    status: "aman" as const,
-  },
-];
+function toStockStatus(stock: number, reorder: number): "habis" | "menipis" | "aman" {
+  if (stock <= 0) return "habis";
+  if (stock <= reorder) return "menipis";
+  return "aman";
+}
 
-export default function StockManagement(){
-    return (
-        <StockNotification items={dummyStock} />
-    )
+export default async function StockManagement() {
+  const tenantId = process.env.DEMO_TENANT_ID;
+  if (!tenantId) return <p className="p-4 text-danger">DEMO_TENANT_ID tidak dikonfigurasi.</p>;
+
+  const [products, kpiToday] = await Promise.all([
+    getProductsForDashboard(tenantId),
+    queryRevenueData(tenantId, "hari ini"),
+  ]);
+
+  const soldMap = new Map(kpiToday.topProducts.map((p) => [p.name, p.qtySold]));
+
+  const items = products.map((p) => ({
+    name:      p.name,
+    stock:     p.stock,
+    soldToday: soldMap.get(p.name) ?? 0,
+    image:     p.image_url ?? "",
+    status:    toStockStatus(p.stock, p.reorder_point),
+  }));
+
+  return <StockNotification items={items} />;
 }
-=======
-export default function ProductsPage() {
-  return null;
-}
->>>>>>> e27bfab813bfe200a0f5d6ab9587fe52db17e319
