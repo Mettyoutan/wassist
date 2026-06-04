@@ -35,7 +35,7 @@ export default function StockNotification({ items }: StockNotificationProps) {
                 ) : (
                   <div className="text-muted mt-1">Sisa {item.stock}</div>
                 )}
-                <div className="text-muted mt-1">Terjual {item.soldToday} porsi hari ini</div>
+                <div className="text-muted mt-1">Terjual {item.soldToday} hari ini</div>
               </div>
             </div>
           ))}
