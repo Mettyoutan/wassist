@@ -22,6 +22,7 @@ export default async function StockManagement() {
     name:      p.name,
     stock:     p.stock,
     soldToday: soldMap.get(p.name) ?? 0,
+    unit:      p.unit,
     image:     p.image_url ?? "",
     status:    toStockStatus(p.stock, p.reorder_point),
   }));

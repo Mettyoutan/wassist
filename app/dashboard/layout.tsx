@@ -1,4 +1,5 @@
 import Navbar from "@/components/dashboard/Navbar";
+import BottomNav from "@/components/dashboard/BottomNav";
 
 export default function DashboardLayout({
   children,
@@ -17,8 +18,11 @@ export default function DashboardLayout({
         overflowX: "hidden",
       }}
     >
-      <Navbar title="Beranda" />
-      {children}
+      <Navbar />
+      <div style={{ paddingBottom: "72px" }}>
+        {children}
+      </div>
+      <BottomNav />
     </div>
   );
 }

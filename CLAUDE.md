@@ -1,5 +1,5 @@
 # CLAUDE.md — WAssist Project Context
-> Last updated: 1 Juni 2026
+> Last updated: 4 Juni 2026
 
 ---
 
@@ -398,9 +398,73 @@ const product = await getProductByRetailerId(tenant.id, cartItem.product_retaile
 | order_new + slot-filling klarifikasi | ✅ | `lib/handlers/order-new.ts`, `lib/handlers/clarification.ts` |
 | Payment QRIS end-to-end | ✅ | `lib/handlers/confirm-order.ts`, `lib/midtrans.ts` |
 | Midtrans callback webhook | ✅ | `app/api/webhook/midtrans/route.ts` |
+| Dashboard: home + orders + products + analytics | ✅ | `app/dashboard/`, `components/dashboard/` |
+| All API routes (kpi, orders, products) | ✅ | `app/api/dashboard/`, `app/api/orders/` |
 | cancel_order | ❌ Cut → low_confidence | post-MVP |
 | repeat_last | ❌ Cut → low_confidence | post-MVP |
 | modify_order | ❌ Cut → low_confidence | post-MVP |
+
+---
+
+## Dashboard UI Design System
+
+> Detail lengkap ada di `design.md`. Section ini hanya keputusan final yang harus dipatuhi.
+
+### Warna Brand (WA-inspired)
+```css
+--color-primary:   #075E54   /* WA dark green — navbar, active state */
+--color-accent:    #25D366   /* WA green — CTA, success badge */
+--color-blue:      #00669E   /* info, link */
+--color-warning:   #F59E0B   /* pending status */
+--color-danger:    #EF4444   /* error, stok habis */
+--color-bg:        #F0F2F5   /* background (WA chat bg feel) */
+--color-surface:   #FFFFFF   /* card surface */
+```
+
+### Navigasi
+- **Bottom navigation bar** — 4 tab (Beranda, Pesanan, Produk, Analitik) — navigasi utama
+- **Hamburger drawer** — tetap ada untuk secondary items (settings, account, logout)
+- Navbar title harus **dinamis per halaman** (bukan hardcoded "Beranda")
+- `padding-bottom: 72px` di main content agar tidak tertutup bottom nav
+
+### Komponen Rules
+- `StatusBadge` "selesai" → green (`--color-accent`), bukan Bootstrap `bg-primary`
+- `StatusBadge` "pending" → amber (`--color-warning`)
+- `StatusBadge` "diproses" → blue (`--color-blue`)
+- `KPICard` background → `--color-bg` (#F0F2F5)
+- Font sizes: 12px label, 13px body, 14px subheading, 18px KPI value, 24px heading
+
+### Halaman Stub (harus ada agar tidak 404)
+- `/dashboard/settings` — stub "Segera Hadir"
+- `/dashboard/account` — stub info tenant
+
+---
+
+## Remaining Items (per 4 Juni 2026)
+
+### Critical (demo blocker)
+- **ngrok + Meta webhook setup** sebelum demo
+- End-to-end test bot dari WA real device
+- Seed demo data (order PAID, stok bervariasi)
+
+### Dashboard UI
+- ✅ Bottom navigation bar + dynamic navbar title
+- ✅ `design.md` + `globals.css` fix (duplicate import, unified tokens)
+- ✅ `StatusBadge` color fix (selesai→green, diproses→blue, pending→amber)
+- ✅ `KPICard` background fix
+- ✅ Stub pages: `/dashboard/settings`, `/dashboard/account`
+- [ ] Toast notifications untuk aksi (finish order, dll)
+- [ ] Empty states saat data kosong
+
+### Nice-to-have
+- `GET /api/orders/[id]` — masih 501
+- Upload product images ke Supabase Storage
+- KPI `change` prop (prior-period comparison)
+
+### Post-Hackathon
+- Auth Opsi B: magic link JWT via `jose`
+- Meta Catalog full setup
+- Cloud Run deploy
 
 ---
 
@@ -446,6 +510,8 @@ gcloud run deploy wassist \
 
 | File | Isi |
 |---|---|
+| `progress.md` | **BACA PERTAMA** — task tracker: selesai, bug, todo per sesi |
+| `design.md` | Design system: warna, tipografi, komponen rules, spacing |
 | `notes/00-overview.md` | Big picture, tim, stack, bobot juri |
 | `notes/03-ai-llm.md` | Gemini, prompt engineering |
 | `notes/05-order-flow.md` | State machine, handler MVP |

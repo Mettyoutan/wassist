@@ -5,25 +5,27 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const menuItems = [
-  { label: "Beranda", href: "/dashboard", icon: "bi-house" },
-  { label: "Kelola Pesanan", href: "/dashboard/orders", icon: "bi-bag" },
-  { label: "Produk & Stok", href: "/dashboard/products", icon: "bi-box" },
-  { label: "Analitik", href: "/dashboard/analytics", icon: "bi-graph-up" },
-  { label: "Pengaturan Toko", href: "/dashboard/settings", icon: "bi-shop" },
-  {
-    label: "Pengaturan Akun",
-    href: "/dashboard/account",
-    icon: "bi-person-gear",
-  },
+  { label: "Beranda",         href: "/dashboard",           icon: "bi-house"       },
+  { label: "Kelola Pesanan",  href: "/dashboard/orders",    icon: "bi-bag"         },
+  { label: "Produk & Stok",   href: "/dashboard/products",  icon: "bi-box"         },
+  { label: "Analitik",        href: "/dashboard/analytics", icon: "bi-graph-up"    },
+  { label: "Pengaturan Toko", href: "/dashboard/settings",  icon: "bi-shop"        },
+  { label: "Pengaturan Akun", href: "/dashboard/account",   icon: "bi-person-gear" },
 ];
 
-interface NavbarProps {
-  title?: string;
-}
+const PAGE_TITLES: Record<string, string> = {
+  "/dashboard":           "WAssist",
+  "/dashboard/orders":    "Pesanan",
+  "/dashboard/products":  "Produk & Stok",
+  "/dashboard/analytics": "Analitik",
+  "/dashboard/settings":  "Pengaturan",
+  "/dashboard/account":   "Akun",
+};
 
-export default function Navbar({ title = "Beranda" }: NavbarProps) {
+export default function Navbar() {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
+  const pageTitle = PAGE_TITLES[pathname] ?? "WAssist";
 
   return (
     <>
@@ -48,11 +50,11 @@ export default function Navbar({ title = "Beranda" }: NavbarProps) {
             position: "absolute",
             left: "50%",
             fontSize: "24px",
-            color: "#00669E",
+            color: "var(--color-primary)",
             transform: "translateX(-50%)",
           }}
         >
-          {title}
+          {pageTitle}
         </span>
       </nav>
 
@@ -96,7 +98,7 @@ export default function Navbar({ title = "Beranda" }: NavbarProps) {
             style={{
               fontFamily: "Shadows Into Light, cursive",
               fontSize: "24px",
-              color: "#00669E",
+              color: "var(--color-primary)",
             }}
           >
             WASSIST
@@ -121,10 +123,10 @@ export default function Navbar({ title = "Beranda" }: NavbarProps) {
                 className="d-flex align-items-center gap-3 px-4 py-3 text-decoration-none"
                 style={{
                   fontSize: "14px",
-                  color: isActive ? "#00669E" : "#374151",
-                  background: isActive ? "#c8eafe" : "transparent",
+                  color: isActive ? "var(--color-primary)" : "#374151",
+                  background: isActive ? "rgba(7,94,84,0.08)" : "transparent",
                   borderRight: isActive
-                    ? "3px solid #00669E"
+                    ? "3px solid var(--color-primary)"
                     : "3px solid transparent",
                   transition: "background 0.15s",
                 }}

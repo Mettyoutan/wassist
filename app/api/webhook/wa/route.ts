@@ -137,6 +137,9 @@ export async function POST(request: NextRequest) {
     const parsed = await parseCustomerMessage(msgText, products, {
       store_name:     tenant.name,
       store_category: tenant.category ?? "toko online",
+      current_order:  session.pending_order?.items.map(i => ({
+        name: i.name, qty: i.qty, size: i.size,
+      })),
     });
 
     // ── INTENT ROUTER ────────────────────────────────────────────────────────

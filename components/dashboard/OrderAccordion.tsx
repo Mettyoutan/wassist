@@ -39,9 +39,14 @@ export default function OrderAccordion({
                   {order.customer} - #{order.orderCode}
                 </span>
               </div>
-              <button className="btn btn-sm p-0 text-success">
+              <a
+                href={`https://wa.me/${order.customer.replace(/\D/g, "")}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn btn-sm p-0 text-success"
+              >
                 <i className="bi bi-whatsapp fs-5"></i>
-              </button>
+              </a>
             </div>
 
             {/* Status & Tanggal */}

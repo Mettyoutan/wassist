@@ -8,7 +8,7 @@ interface KPICardProps {
 export default function KPICard({ title, value, change, icon }: KPICardProps) {
   const isPositive = change >= 0
   return (
-    <div className="card border-0 h-100" style={{ background: '#f8f9fa' }}>
+    <div className="card border-0 h-100" style={{ background: 'var(--color-bg)' }}>
       <div className="card-body p-3">
         <div className="d-flex align-items-center gap-2 mb-1">
           {icon && <i className={`bi ${icon} text-muted`} style={{ fontSize: '13px' }}></i>}

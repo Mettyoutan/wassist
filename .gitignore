@@ -23,6 +23,10 @@
 # misc
 .DS_Store
 *.pem
+*.stackdump
+
+# IDE
+.vscode/
 
 # debug
 npm-debug.log*
