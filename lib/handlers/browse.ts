@@ -13,7 +13,7 @@ export async function handleBrowseIntent(tenant: { id: string }, senderPhone: st
     // Fallback: teks daftar produk
     const products = await getActiveProducts(tenant.id);
     const list = products.map(p =>
-      `• ${p.name} — Rp${p.price.toLocaleString("id-ID")}`
+      `• ${p.name} — Rp${p.price.toLocaleString("id-ID")}/${p.unit}`
     ).join("\n");
     await sendWhatsAppMessage(senderPhone,
       `Halo! Ini koleksi kami:\n\n${list}\n\nBalas dengan nama produk + jumlah untuk order. Contoh: *Kaos Oversize 2*`

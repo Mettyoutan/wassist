@@ -1,4 +1,4 @@
-# WAssist — Order Flow
+# WAssist — /Order Flow
 > Jalur MVP yang dibangun: 1, 2, 6, 7. Jalur 3/4/5 di-cut → fallback ke low_confidence.
 > Implementasi payment (Midtrans, QR image) ada di `notes/07-payment.md`.
 

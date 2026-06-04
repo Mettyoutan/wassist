@@ -2,6 +2,7 @@ interface StockItem {
   name: string
   stock: number
   soldToday: number
+  unit: string
   image: string
   status: 'habis' | 'menipis' | 'aman'
 }
@@ -28,14 +29,18 @@ export default function StockNotification({ items }: StockNotificationProps) {
           {items.map((item, i) => (
             <div key={i} className="col-4">
               <div className="rounded-3 p-2 text-center" style={{ background: statusConfig[item.status].bg, fontSize: '11px' }}>
-                <img src={item.image} alt={item.name} style={{ width: '48px', height: '48px', objectFit: 'cover', borderRadius: '8px' }}/>
+                {item.image ? (
+                  <img src={item.image} alt={item.name} style={{ width: '48px', height: '48px', objectFit: 'cover', borderRadius: '8px' }}/>
+                ) : (
+                  <div style={{ width: '48px', height: '48px', borderRadius: '8px', background: '#e9ecef', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px' }}>👗</div>
+                )}
                 <div className="fw-semibold mt-1" style={{ fontSize: '11px', lineHeight: '1.2' }}>{item.name}</div>
                 {item.status === 'habis' ? (
                   <span className="badge bg-danger mt-1" style={{ fontSize: '10px' }}>Habis</span>
                 ) : (
                   <div className="text-muted mt-1">Sisa {item.stock}</div>
                 )}
-                <div className="text-muted mt-1">Terjual {item.soldToday} hari ini</div>
+                <div className="text-muted mt-1">Terjual {item.soldToday} {item.unit} hari ini</div>
               </div>
             </div>
           ))}
