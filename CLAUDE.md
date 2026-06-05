@@ -468,11 +468,105 @@ const product = await getProductByRetailerId(tenant.id, cartItem.product_retaile
 
 ---
 
+## Prinsip Kode Berkelanjutan (Sustainable Codebase)
+
+### Layer Separation — Aturan Wajib
+
+Setiap layer punya satu tanggung jawab. **Jangan campur.**
+
+| Layer | Lokasi | Boleh | Tidak Boleh |
+|---|---|---|---|
+| **DB queries** | `server/db/*.ts` | `supabaseAdmin.*`, return typed rows | Logic bisnis, formatting |
+| **Business logic** | `lib/handlers/*.ts`, `lib/owner/*.ts` | Import dari `@/server/db`, kirim WA | `supabaseAdmin.*` langsung |
+| **API routes** | `app/api/**` | Orchestrate handlers, return JSON | DB query langsung, business logic |
+| **AI/LLM** | `lib/ai/*.ts`, `lib/owner/*.ts` | Model calls, Zod parse | DB calls, WA send |
+| **Templates** | `lib/response-template.ts` | Pure string functions | Import apapun selain tipe |
+
+**Aturan check:** Jika kamu menulis `supabaseAdmin.from(...)` di luar `server/db/`, itu salah.
+**Cara benar:** Buat fungsi baru di `server/db/`, export dari `server/db/index.ts`, import via `@/server/db`.
+
+### Menambah Fungsi DB Baru
+
+1. Tulis fungsi di file relevan di `server/db/` (bukan file baru kecuali domain benar-benar baru)
+2. Return type eksplisit — jangan `any`, jangan rely pada inference Supabase yang lebar
+3. Export dari `server/db/index.ts`
+4. Import di handler via `@/server/db` (bukan path langsung ke `server/db/orders.ts` dll)
+
+```typescript
+// ✅ Benar
+// server/db/tenants.ts
+export async function getTenantById(
+  tenantId: string
+): Promise<{ name: string; owner_phone: string } | null> {
+  const { data, error } = await supabaseAdmin
+    .from("tenants").select("name, owner_phone").eq("id", tenantId).single();
+  if (error) {
+    if (error.code !== "PGRST116") console.error("[DB] getTenantById:", error.message);
+    return null;
+  }
+  return data;
+}
+// server/db/index.ts — tambahkan export
+export { getTenantById } from "./tenants";
+
+// app/api/*/route.ts atau lib/handlers/*.ts
+import { getTenantById } from "@/server/db";  // ✅ bukan "@/server/db/tenants"
+```
+
+### Error Handling — Standar
+
+```typescript
+// Handler: tangani error + kirim feedback ke customer
+try {
+  await riskyOperation();
+} catch (err) {
+  console.error("[Handler/context] Error:", err);
+  await sendWhatsAppMessage(senderPhone, "Terjadi kesalahan, coba lagi ya kak 🙏");
+  return;
+}
+
+// DB read: log + return null (jangan throw)
+if (error) {
+  if (error.code !== "PGRST116") console.error("[DB] functionName:", error.message);
+  return null;
+}
+
+// DB mutation kritis (createOrder, updateOrderMidtrans): throw — agar caller bisa handle
+if (error) throw new Error(`[DB] createOrder: ${error.message}`);
+```
+
+### Response Templates
+
+Semua string pesan WA → `lib/response-template.ts`. **Tidak boleh** ada string pesan hardcoded di handler atau route.
+
+```typescript
+// ❌ Salah — hardcode di handler
+await sendWhatsAppMessage(phone, "Pesananmu dibatalkan ya kak 👍 Ketik *menu* ...");
+
+// ✅ Benar — fungsi di lib/response-template.ts
+export function cancelledMessage(): string { return "Pesananmu dibatalkan ya kak 👍 ..."; }
+// Lalu di handler:
+await sendWhatsAppMessage(phone, cancelledMessage());
+```
+
+### Menambah Intent Baru
+
+Wajib update **3 tempat sekaligus**:
+1. `lib/ai/models.ts` — `systemInstruction` + `responseSchema.enum`
+2. `lib/ai/customer-parser.ts` — `ParsedIntentSchema` Zod enum
+3. `app/api/webhook/wa/route.ts` — tambah `case` di switch
+
+Wajib tambah **handler file** di `lib/handlers/` (satu file per intent besar).
+
+---
+
 ## Anti-Patterns — Jangan Lakukan Ini
 
 ```
+❌ supabaseAdmin.from(...) di luar server/db/ → buat fungsi di server/db/, export dari index.ts
 ❌ Import DB queries dari @/lib/db → pakai @/server/db
-❌ Inline supabaseAdmin query di handler → pakai fungsi dari @/server/db
+❌ Import langsung dari server/db/orders.ts → import dari @/server/db (via index.ts)
+❌ String pesan WA hardcode di handler → pakai fungsi dari lib/response-template.ts
 ❌ product_name di responseSchema → pakai product_index (integer)
 ❌ SchemaType.INTEGER untuk qty → pakai SchemaType.NUMBER
 ❌ Zod .int() untuk qty → pakai .positive() saja
@@ -487,6 +581,7 @@ const product = await getProductByRetailerId(tenant.id, cartItem.product_retaile
 ❌ NEXT_PUBLIC_SUPABASE_URL dengan trailing /rest/v1/ → hanya base URL
 ❌ META_PHONE_NUMBER_ID berisi nomor HP → isi Meta Phone Number ID dari dashboard
 ❌ Update intent di customer-parser.ts saja → WAJIB update models.ts (systemInstruction + enum) sekaligus
+❌ Tambah fungsi DB baru tanpa export di server/db/index.ts → handler tidak bisa import
 ```
 
 ---

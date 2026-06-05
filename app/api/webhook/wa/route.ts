@@ -8,7 +8,8 @@ import { parseCustomerMessage }          from "@/lib/ai/customer-parser";
 import { sendWhatsAppMessage }           from "@/lib/whatsapp";
 import { CONFIRM_KEYWORDS,
          CANCEL_KEYWORDS }               from "@/lib/constants/confirmation-keywords";
-import { greetingMessage }               from "@/lib/response-template";
+import { greetingMessage,
+         cancelOrderMessage }            from "@/lib/response-template";
 import { handleBrowseIntent }            from "@/lib/handlers/browse";
 import { handleStatusIntent }            from "@/lib/handlers/status";
 import { handleHandoffIntent }           from "@/lib/handlers/handoff";
@@ -17,6 +18,7 @@ import { handleClarificationAnswer }   from "@/lib/handlers/clarification";
 import { processOrderConfirmation }    from "@/lib/handlers/confirm-order";
 import { handleCartOrder }               from "@/lib/handlers/cart-order";
 import { handleOwnerCommand }            from "@/lib/handlers/owner";
+import { handleRepeatLastIntent }        from "@/lib/handlers/repeat-last";
 import type { DbTenant }                 from "@/lib/types/db";
 import type { WAWebhookBody, WAMessage,
               WATextMessage,
@@ -85,7 +87,12 @@ export async function POST(request: NextRequest) {
       const normalized = msgText.toLowerCase().trim();
 
       if (CONFIRM_KEYWORDS.has(normalized)) {
-        await processOrderConfirmation(tenant, senderPhone, session);
+        try {
+          await processOrderConfirmation(tenant, senderPhone, session);
+        } catch (err) {
+          console.error("[Webhook] processOrderConfirmation failed:", err);
+          await sendWhatsAppMessage(senderPhone, "Terjadi kesalahan saat memproses pesanan kak 🙏 Coba lagi ya.");
+        }
         return NextResponse.json({ status: "ok" });
       }
 
@@ -160,10 +167,16 @@ export async function POST(request: NextRequest) {
         await handleStatusIntent(tenant, senderPhone);
         break;
 
-      // Jalur cut MVP + low confidence → handoff
       case "repeat_last":
-      case "modify_order":
+        await handleRepeatLastIntent(tenant, senderPhone, session);
+        break;
+
       case "cancel_order":
+        await sendWhatsAppMessage(senderPhone, cancelOrderMessage());
+        break;
+
+      // Post-MVP + low confidence → handoff
+      case "modify_order":
       case "low_confidence":
       default:
         await handleHandoffIntent(tenant, senderPhone);

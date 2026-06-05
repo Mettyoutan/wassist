@@ -4,7 +4,7 @@ import {
   getOrderItemsByOrderId,
   updateOrderStatus,
   getUserById,
-  supabaseAdmin,
+  getTenantById,
   decrementProductStock,
 }                                              from "@/server/db";
 import { verifyMidtransSignature }             from "@/lib/midtrans";
@@ -51,10 +51,14 @@ export async function POST(request: NextRequest) {
     ) {
       await updateOrderStatus(order.id, "PAID", "PAID");
 
-      // Decrement stok per item
+      // Decrement stok per item — per-item try/catch agar satu gagal tidak skip sisanya
       const items = await getOrderItemsByOrderId(order.id);
       for (const item of items) {
-        await decrementProductStock(item.product_id, item.qty);
+        try {
+          await decrementProductStock(item.product_id, item.qty);
+        } catch (e) {
+          console.error("[Midtrans] decrementProductStock failed for product", item.product_id, e);
+        }
       }
 
       // Notif customer
@@ -66,16 +70,12 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Notif owner — ambil owner_phone via tenant_id
-      const { data: tenant } = await supabaseAdmin
-        .from("tenants")
-        .select("owner_phone")
-        .eq("id", order.tenant_id)
-        .single();
+      // Notif owner
+      const tenant = await getTenantById(order.tenant_id);
 
       if (tenant?.owner_phone) {
         await sendWhatsAppMessage(
-          tenant.owner_phone as string,
+          tenant.owner_phone,
           `💰 *Pembayaran masuk!*\nOrder #${order.id.slice(-6).toUpperCase()}\nTotal: *Rp${order.total_amount.toLocaleString("id-ID")}*`
         );
       }

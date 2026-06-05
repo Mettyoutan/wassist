@@ -86,3 +86,24 @@ export const statusMessages: Record<string, string> = {
   DONE:              "Pesananmu sudah selesai. Terima kasih ya kak! 💚",
   CANCELLED:         "Pesananmu sudah dibatalkan.",
 };
+
+export function cancelOrderMessage(): string {
+  return (
+    `Untuk membatalkan pesanan kak:\n\n` +
+    `• Pesanan *belum bayar*: balas *batal* saat bot tampilkan ringkasan pesanan\n` +
+    `• Pesanan *sudah bayar*: hubungi kami langsung ya, kami bantu proses 🙏\n\n` +
+    `Ada yang bisa dibantu lagi?`
+  );
+}
+
+export function repeatLastNotFoundMessage(): string {
+  return `Belum ada pesanan selesai sebelumnya kak 😊 Ketik *menu* untuk lihat koleksi kami!`;
+}
+
+export function repeatLastUnavailableMessage(unavailable: string[]): string {
+  const list = unavailable.map((n) => `• ${n}`).join("\n");
+  return (
+    `Maaf kak, semua produk dari pesanan sebelumnya sudah tidak tersedia:\n${list}\n\n` +
+    `Ketik *menu* untuk lihat koleksi terbaru kami 😊`
+  );
+}

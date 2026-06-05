@@ -1,4 +1,4 @@
-import { supabaseAdmin,
+import { getProductsByTenantAll,
          updateProductPrice,
          updateProductStock,
          setProductReorderPoint,
@@ -29,20 +29,18 @@ export async function handleOwnerCommand(
     return;
   }
 
-  // 2. Fetch daftar produk aktif (untuk context parser)
-  const { data: rawProducts } = await supabaseAdmin
-    .from("products")
-    .select("id, name, price, unit, stock, reorder_point")
-    .eq("tenant_id", tenant.id)
-    .eq("is_active", true)
-    .order("name", { ascending: true });
+  // 2. Fetch SEMUA produk (termasuk nonaktif) agar activate_product bisa memilih
+  const products = await getProductsByTenantAll(tenant.id);
 
-  const products = rawProducts ?? [];
-
-  // 3. Parse perintah owner via Gemini
+  // 3. Parse perintah owner via Gemini — produk nonaktif ditandai [nonaktif]
   const parsed = await parseOwnerCommand(
     text,
-    products.map((p) => ({ name: p.name, price: p.price, unit: p.unit, stock: p.stock }))
+    products.map((p) => ({
+      name:  p.is_active ? p.name : `${p.name} [nonaktif]`,
+      price: p.price,
+      unit:  p.unit,
+      stock: p.stock,
+    }))
   );
 
   // 4. Dispatch berdasarkan action

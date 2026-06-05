@@ -7,7 +7,7 @@
 ## Status Umum
 - **Deadline submit:** 11 Juni 2026
 - **Target selesai:** 8 Juni 2026
-- **Last updated:** 4 Juni 2026
+- **Last updated:** 5 Juni 2026
 - **Build status:** ✅ 0 TypeScript error (`npm run build` clean)
 - **Deploy status:** ❌ Belum di-deploy ke Cloud Run (BLOCKER)
 
@@ -25,6 +25,7 @@
 - [x] `lib/handlers/handoff.ts` — low_confidence → handoff ke owner
 - [x] `lib/handlers/owner.ts` — 11 owner actions + mutation confirmation flow
 - [x] `lib/handlers/cart-order.ts` — Cart dari WA Catalog (meta order type)
+- [x] `lib/handlers/repeat-last.ts` — repeat_last: fetch last PAID order, re-verify stok+harga, set awaiting_confirmation ✅ 2026-06-05
 
 ### AI / LLM
 - [x] `lib/ai/models.ts` — 3 model Gemini (customerParser 0.1, ownerParser 0.1, generator 0.4)
@@ -58,6 +59,30 @@
 ---
 
 ## 🐛 BUG DITEMUKAN — semua sudah fix
+
+### Bug 6 — activate_product tidak bisa pilih produk nonaktif [HIGH]
+- **File:** `lib/handlers/owner.ts` baris 33-38
+- **Masalah:** Query fetch produk pakai `is_active=true` → inactive products tidak muncul di daftar → owner tidak bisa re-aktifkan produk
+- **Fix:** `getProductsByTenantAll()` — fetch semua produk, tandai inactive dengan `[nonaktif]` di prompt Gemini
+- **Status:** ✅ Fixed 2026-06-05
+
+### Bug 7 — processOrderConfirmation tidak di-catch [MEDIUM]
+- **File:** `app/api/webhook/wa/route.ts` baris 88
+- **Masalah:** Exception dari `processOrderConfirmation` → outer catch log saja → customer silent failure
+- **Fix:** Wrap dalam try-catch, kirim error message ke customer
+- **Status:** ✅ Fixed 2026-06-05
+
+### Bug 8 — Partial stock decrement jika loop throw [MEDIUM]
+- **File:** `app/api/webhook/midtrans/route.ts` baris 56
+- **Masalah:** Jika `decrementProductStock` item N throw → item N+1..M di-skip, order sudah PAID → inventory mismatch
+- **Fix:** Per-item try-catch dengan `console.error` — semua item diproses meski satu gagal
+- **Status:** ✅ Fixed 2026-06-05
+
+### Bug 9 — Architecture violation: inline supabaseAdmin di routes + handler [MEDIUM]
+- **Files:** `app/api/webhook/midtrans/route.ts`, `app/api/dashboard/kpi/route.ts`, `lib/handlers/owner.ts`
+- **Masalah:** `supabaseAdmin.from(...)` langsung di luar `server/db/` — violates layer separation
+- **Fix:** Tambah `getTenantById()` di `server/db/tenants.ts`, `getProductsByTenantAll()` di `server/db/products.ts`
+- **Status:** ✅ Fixed 2026-06-05
 
 ### Bug 1 — `current_order` context tidak pernah diisi [MEDIUM]
 - **File:** `app/api/webhook/wa/route.ts` sekitar baris call `parseCustomerMessage`
@@ -100,6 +125,12 @@
 - [x] Fix Bug 3: StockNotification broken image → placeholder emoji 👗 ✅ 2026-06-04
 - [x] Fix Bug 5: WA button di OrderAccordion → href wa.me ✅ 2026-06-04
 - [x] Fix Bug 1: Pass `current_order` ke Gemini context ✅ 2026-06-04
+- [x] Fix Bug 6: activate_product bisa pilih produk nonaktif ✅ 2026-06-05
+- [x] Fix Bug 7: processOrderConfirmation try-catch ✅ 2026-06-05
+- [x] Fix Bug 8: partial stock decrement per-item catch ✅ 2026-06-05
+- [x] Fix Bug 9: architecture violations (inline supabaseAdmin) ✅ 2026-06-05
+- [x] cancel_order intent → template informatif (bukan generic handoff) ✅ 2026-06-05
+- [x] repeat_last intent → re-order pesanan terakhir ✅ 2026-06-05
 
 ### MEDIUM — polish
 - [x] Fix Bug 4: Browse fallback tampilkan unit ✅ 2026-06-04
@@ -130,6 +161,17 @@
 ---
 
 ## 📝 Catatan Sesi
+
+### 2026-06-05
+- Fix Bug 6-9: architecture violations + runtime bugs + intent improvements
+- Added `getTenantById()` → `server/db/tenants.ts`
+- Added `getProductsByTenantAll()` → `server/db/products.ts`
+- Added `getLastCompletedOrderWithItems()` + `LastOrderItem` → `server/db/orders.ts`
+- Implemented `handleRepeatLastIntent` → `lib/handlers/repeat-last.ts`
+- `cancel_order` → dedicated `cancelOrderMessage()` template
+- `repeat_last` → full handler wired in webhook
+- `activate_product` fix: fetch all products incl. inactive
+- Build ✅ 0 TypeScript error, 17 routes
 
 ### 2026-06-04 (sesi 2)
 - Mobile UI Polish Phase 1-5 selesai semua

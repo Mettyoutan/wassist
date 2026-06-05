@@ -189,3 +189,48 @@ export async function getOrdersByTenant(
     })),
   }));
 }
+
+export type LastOrderItem = {
+  product_id:   string;
+  product_name: string;
+  qty:          number;
+  unit:         string;
+  size:         string | null;
+  notes:        string | null;
+};
+
+export async function getLastCompletedOrderWithItems(
+  tenantId: string,
+  userId:   string
+): Promise<{ orderId: string; items: LastOrderItem[] } | null> {
+  const { data: order, error: orderErr } = await supabaseAdmin
+    .from("orders")
+    .select("id")
+    .eq("tenant_id", tenantId)
+    .eq("customer_user_id", userId)
+    .eq("payment_status", "PAID")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .single();
+
+  if (orderErr || !order) return null;
+
+  const { data: items, error: itemsErr } = await supabaseAdmin
+    .from("order_items")
+    .select("product_id, qty, unit, size, notes, products(name)")
+    .eq("order_id", order.id);
+
+  if (itemsErr || !items) return null;
+
+  return {
+    orderId: order.id,
+    items: (items as any[]).map((i) => ({
+      product_id:   i.product_id,
+      product_name: i.products?.name ?? "",
+      qty:          i.qty,
+      unit:         i.unit,
+      size:         i.size ?? null,
+      notes:        i.notes ?? null,
+    })),
+  };
+}
