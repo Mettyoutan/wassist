@@ -4,7 +4,8 @@ import { getTenantByWaPhoneId,
          getActiveProducts,
          updateOrderStatus }             from "@/server/db";
 import { getSession,
-         clearSession }                  from "@/lib/session";
+         clearSession,
+         cleanupExpiredSessions }        from "@/lib/session";
 import { parseCustomerMessage }          from "@/lib/ai/customer-parser";
 import { sendWhatsAppMessage }           from "@/lib/whatsapp";
 import { parseConfirmationIntent }        from "@/lib/ai/confirmation-parser";
@@ -40,8 +41,12 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 }
 
+// Cleanup setiap 50 request — cegah memory leak tanpa overhead per-request
+let _reqCount = 0;
+
 // ─── POST: Semua pesan masuk dari Meta ───────────────────────────────────────
 export async function POST(request: NextRequest) {
+  if (++_reqCount % 50 === 0) cleanupExpiredSessions();
   try {
     const body  = (await request.json()) as WAWebhookBody;
     const value = body.entry?.[0]?.changes?.[0]?.value;
