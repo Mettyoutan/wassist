@@ -14,8 +14,7 @@ import { fulfillmentNotificationMessage,
 import { generateRevenueResponse }    from "@/lib/owner/generator";
 import { parseOwnerCommand }          from "@/lib/owner/parser";
 import { setSession, clearSession }   from "@/lib/session";
-import { CONFIRM_KEYWORDS,
-         CANCEL_KEYWORDS }            from "@/lib/constants/confirmation-keywords";
+import { parseConfirmationIntent }      from "@/lib/ai/confirmation-parser";
 import type { DbTenant }              from "@/lib/types/db";
 import type { Session,
               PendingOwnerAction }    from "@/lib/types/session";
@@ -258,16 +257,21 @@ async function handleOwnerConfirmation(
   text:       string,
   session:    Session
 ): Promise<void> {
-  const normalized = text.toLowerCase().trim();
   const action = session.pending_owner_action;
 
-  if (CANCEL_KEYWORDS.has(normalized) || !action) {
+  if (!action) {
     clearSession(tenant.id, ownerPhone);
     await sendWhatsAppMessage(ownerPhone, "Dibatalkan 👍");
     return;
   }
 
-  if (!CONFIRM_KEYWORDS.has(normalized)) {
+  const signal = await parseConfirmationIntent(text);
+  if (signal === "cancel") {
+    clearSession(tenant.id, ownerPhone);
+    await sendWhatsAppMessage(ownerPhone, "Dibatalkan 👍");
+    return;
+  }
+  if (signal !== "confirm") {
     await sendWhatsAppMessage(ownerPhone, "Balas *ya* untuk konfirmasi atau *batal* untuk membatalkan.");
     return;
   }

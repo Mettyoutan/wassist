@@ -1,6 +1,7 @@
 import { sendWhatsAppMessage }                     from "@/lib/whatsapp";
 import { setSession, clearSession }                from "@/lib/session";
 import { handleBrowseIntent }                      from "@/lib/handlers/browse";
+import { parseClarificationInput }                 from "@/lib/ai/confirmation-parser";
 import {
   orderConfirmationMessage,
   variantClarificationMessage,
@@ -8,11 +9,6 @@ import {
 }                                                  from "@/lib/response-template";
 import type { DbTenant }                           from "@/lib/types/db";
 import type { Session, PendingOrderItem }          from "@/lib/types/session";
-
-function extractNumber(text: string): number | null {
-  const match = text.match(/\d+(\.\d+)?/);
-  return match ? parseFloat(match[0]) : null;
-}
 
 export async function handleClarificationAnswer(
   tenant:      DbTenant,
@@ -28,10 +24,23 @@ export async function handleClarificationAnswer(
   }
 
   const { kind, candidates, qty: knownQty, integer_only, max_stock, size, notes, resolved } = clarification;
-  const num = extractNumber(msgText.trim());
+
+  const { choice: num, cancel: isCancelled } = await parseClarificationInput(
+    msgText,
+    kind,
+    candidates.length,
+    integer_only,
+    max_stock,
+  );
+
+  if (isCancelled) {
+    clearSession(tenant.id, senderPhone);
+    await sendWhatsAppMessage(senderPhone, "Pesanan dibatalkan ya kak 👍 Ketik *menu* untuk lihat katalog.");
+    return;
+  }
 
   if (kind === "variant") {
-    if (num !== null && Number.isInteger(num) && num >= 1 && num <= candidates.length) {
+    if (Number.isInteger(num) && num >= 1 && num <= candidates.length) {
       const chosen = candidates[num - 1];
 
       // Qty belum diketahui → tanya qty dulu
@@ -101,7 +110,7 @@ export async function handleClarificationAnswer(
 
   // kind === "quantity"
   const prod = candidates[0];
-  if (num !== null && num > 0) {
+  if (num > 0) {
     if (integer_only && !Number.isInteger(num)) {
       await handleRetry(tenant, senderPhone, session, clarification.retry_count, () =>
         sendWhatsAppMessage(

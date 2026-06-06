@@ -7,8 +7,7 @@ import { getSession,
          clearSession }                  from "@/lib/session";
 import { parseCustomerMessage }          from "@/lib/ai/customer-parser";
 import { sendWhatsAppMessage }           from "@/lib/whatsapp";
-import { CONFIRM_KEYWORDS,
-         CANCEL_KEYWORDS }               from "@/lib/constants/confirmation-keywords";
+import { parseConfirmationIntent }        from "@/lib/ai/confirmation-parser";
 import { greetingMessage,
          cancelOrderMessage,
          confirmationPendingMessage,
@@ -91,10 +90,9 @@ export async function POST(request: NextRequest) {
 
     // ── STATE MACHINE — cek dulu sebelum Gemini ──────────────────────────────
     if (session.state === "awaiting_confirmation") {
-      const normalized = msgText.toLowerCase().trim();
+      const signal = await parseConfirmationIntent(msgText);
 
-      // Cek confirmation dengan keywords
-      if (CONFIRM_KEYWORDS.has(normalized)) {
+      if (signal === "confirm") {
         try {
           await processOrderConfirmation(tenant, senderPhone, session);
         } catch (err) {
@@ -104,7 +102,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ status: "ok" });
       }
 
-      if (CANCEL_KEYWORDS.has(normalized)) {
+      if (signal === "cancel") {
         clearSession(tenant.id, senderPhone);
         await sendWhatsAppMessage(
           senderPhone,
@@ -113,7 +111,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ status: "ok" });
       }
 
-      // Bukan confirm/cancel → coba parse sebagai tambah item ke pesanan aktif
+      // signal === "ambiguous" → coba parse sebagai tambah item ke pesanan aktif
       const productsForAdd = await getActiveProducts(tenant.id);
       const parsedAdd = await parseCustomerMessage(msgText, productsForAdd, {
         store_name:     tenant.name,
@@ -136,19 +134,13 @@ export async function POST(request: NextRequest) {
     }
 
     if (session.state === "awaiting_clarification") {
-      const normalized = msgText.toLowerCase().trim();
-      if (CANCEL_KEYWORDS.has(normalized)) {
-        clearSession(tenant.id, senderPhone);
-        await sendWhatsAppMessage(senderPhone, "Pesanan dibatalkan ya kak 👍 Ketik *menu* untuk lihat katalog.");
-        return NextResponse.json({ status: "ok" });
-      }
       await handleClarificationAnswer(tenant, senderPhone, msgText, session);
       return NextResponse.json({ status: "ok" });
     }
 
     if (session.state === "awaiting_payment") {
-      const normalized = msgText.toLowerCase().trim();
-      if (CANCEL_KEYWORDS.has(normalized)) {
+      const signal = await parseConfirmationIntent(msgText);
+      if (signal === "cancel") {
         if (session.current_order_id) {
           try {
             await updateOrderStatus(session.current_order_id, "CANCELLED");
