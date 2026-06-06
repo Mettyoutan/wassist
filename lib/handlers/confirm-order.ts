@@ -2,6 +2,7 @@ import {
   getUserIdByPhone,
   createOrder,
   updateOrderMidtrans,
+  deleteOrder,
 }                                                    from "@/server/db";
 import { createQrisPayment }                         from "@/lib/midtrans";
 import {
@@ -45,8 +46,14 @@ export async function processOrderConfirmation(
   // 3. Buat order di DB (hanya setelah Midtrans berhasil)
   const { orderId } = await createOrder(tenant.id, userId, items, total);
 
-  // 4. Update order dengan data Midtrans
-  await updateOrderMidtrans(orderId, midtransId, paymentUrl);
+  // 4. Update order dengan data Midtrans — rollback order jika gagal (hindari orphan)
+  try {
+    await updateOrderMidtrans(orderId, midtransId, paymentUrl);
+  } catch (err) {
+    console.error("[confirmOrder] updateOrderMidtrans failed, rolling back order:", err);
+    await deleteOrder(orderId);
+    throw err;
+  }
 
   // 5. Generate QR lokal dari qr_string. Jika berhasil, kirim image saja (tanpa teks duplikat).
   // Jika gagal, fallback ke teks paymentLinkMessage.
@@ -81,18 +88,18 @@ export async function processOrderConfirmation(
     await sendWhatsAppMessage(senderPhone, paymentLinkMessage(total, paymentUrl, midtransId));
   }
 
-  // 6. Notif owner
-  const itemSummary = items.map(i => `${i.name} x${i.qty}`).join(", ");
-  await sendWhatsAppMessage(
-    tenant.owner_phone,
-    `🛒 *Order baru!*\nDari: ${senderPhone}\nTotal: *Rp${total.toLocaleString("id-ID")}*\nItem: ${itemSummary}\nOrder ID: ${midtransId}`
-  );
-
-  // 7. Update session → awaiting_payment
+  // 6. Update session → awaiting_payment (sebelum notif owner — agar state konsisten meski notif gagal)
   setSession(tenant.id, senderPhone, {
     state:            "awaiting_payment",
     current_order_id: orderId,
     retry_count:      0,
     last_updated:     Date.now(),
   });
+
+  // 7. Notif owner — best-effort, jangan abort flow jika gagal
+  const itemSummary = items.map(i => `${i.name} x${i.qty}`).join(", ");
+  sendWhatsAppMessage(
+    tenant.owner_phone,
+    `🛒 *Order baru!*\nDari: ${senderPhone}\nTotal: *Rp${total.toLocaleString("id-ID")}*\nItem: ${itemSummary}\nOrder ID: ${midtransId}`
+  ).catch((err) => console.error("[confirmOrder] owner notification failed:", err));
 }

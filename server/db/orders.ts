@@ -86,6 +86,12 @@ export async function updateOrderMidtrans(
   if (error) throw new Error(`[DB] updateOrderMidtrans: ${error.message}`);
 }
 
+// Hard-delete order — rollback saat updateOrderMidtrans gagal setelah createOrder.
+export async function deleteOrder(orderId: string): Promise<void> {
+  const { error } = await supabaseAdmin.from("orders").delete().eq("id", orderId);
+  if (error) console.error("[DB] deleteOrder:", error.message);
+}
+
 // Update status + payment_status order — dipanggil dari Midtrans webhook callback.
 export async function updateOrderStatus(
   orderId: string,
