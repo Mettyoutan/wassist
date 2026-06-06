@@ -89,6 +89,7 @@ ACTION (pilih tepat satu):
 - close_store       : tutup toko
 - mark_fulfilled    : tandai order sudah dikirim / dalam pengiriman (status PAID → FULFILLED), notif customer
 - mark_done         : tandai order sudah selesai / diterima customer (status FULFILLED → DONE), notif customer
+- mark_paid         : tandai order sudah bayar secara manual / konfirmasi pembayaran transfer (status AWAITING_PAYMENT → PAID)
 - help              : minta bantuan atau daftar perintah
 - unknown           : perintah tidak jelas atau di luar daftar
 
@@ -108,7 +109,7 @@ ATURAN OUTPUT:
         action: {
           type: SchemaType.STRING,
           format: "enum",
-          enum: ["get_revenue","get_stock","update_price","update_stock","set_reorder_point","deactivate_product","activate_product","open_store","close_store","mark_fulfilled","mark_done","help","unknown"],
+          enum: ["get_revenue","get_stock","update_price","update_stock","set_reorder_point","deactivate_product","activate_product","open_store","close_store","mark_fulfilled","mark_done","mark_paid","help","unknown"],
         },
         product_index: { type: SchemaType.INTEGER },
         value:         { type: SchemaType.NUMBER },
@@ -156,6 +157,10 @@ Tentukan apakah pesan berarti:
 - confirm  : setuju / ya / lanjut / oke (dalam konteks mengkonfirmasi sesuatu)
 - cancel   : tidak mau / batal / stop / gak jadi
 - ambiguous: tidak jelas, tidak bisa dipastikan
+
+PENTING: Jika pesan mengandung nama produk, kata "tambah", "mau pesan", "pesan X lagi",
+atau request item baru → SELALU kembalikan ambiguous.
+Customer mungkin ingin menambah item ke pesanan, bukan mengkonfirmasi pesanan selesai.
 
 Handle bahasa informal Indonesia: typo, singkatan, campur Inggris-Indonesia, slang (gak, ngga, gas, sip, dll).`,
   generationConfig: {
