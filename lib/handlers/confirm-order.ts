@@ -11,7 +11,7 @@ import {
   sendWhatsAppImageMessage,
 }                                                    from "@/lib/whatsapp";
 import { setSession }                                from "@/lib/session";
-import { paymentLinkMessage, qrPaymentCaption }       from "@/lib/response-template";
+import { paymentLinkMessage, qrPaymentCaption, ownerNewOrderMessage } from "@/lib/response-template";
 import type { DbTenant }                             from "@/lib/types/db";
 import type { Session }                              from "@/lib/types/session";
 import QRCode from "qrcode"
@@ -19,7 +19,8 @@ import QRCode from "qrcode"
 export async function processOrderConfirmation(
   tenant:      DbTenant,
   senderPhone: string,
-  session:     Session
+  session:     Session,
+  address?:    string
 ): Promise<void> {
   const pendingOrder = session.pending_order;
   if (!pendingOrder) {
@@ -44,7 +45,7 @@ export async function processOrderConfirmation(
   });
 
   // 3. Buat order di DB (hanya setelah Midtrans berhasil)
-  const { orderId } = await createOrder(tenant.id, userId, items, total);
+  const { orderId } = await createOrder(tenant.id, userId, items, total, address);
 
   // 4. Update order dengan data Midtrans — rollback order jika gagal (hindari orphan)
   try {
@@ -92,6 +93,7 @@ export async function processOrderConfirmation(
   setSession(tenant.id, senderPhone, {
     state:            "awaiting_payment",
     current_order_id: orderId,
+    pending_order:    undefined,
     retry_count:      0,
     last_updated:     Date.now(),
   });
@@ -100,6 +102,6 @@ export async function processOrderConfirmation(
   const itemSummary = items.map(i => `${i.name} x${i.qty}`).join(", ");
   sendWhatsAppMessage(
     tenant.owner_phone,
-    `🛒 *Order baru!*\nDari: ${senderPhone}\nTotal: *Rp${total.toLocaleString("id-ID")}*\nItem: ${itemSummary}\nOrder ID: ${midtransId}`
+    ownerNewOrderMessage(senderPhone, total, itemSummary, midtransId, address)
   ).catch((err) => console.error("[confirmOrder] owner notification failed:", err));
 }
