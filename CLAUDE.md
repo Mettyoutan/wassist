@@ -1,5 +1,5 @@
 # CLAUDE.md — WAssist Project Context
-> Last updated: 4 Juni 2026
+> Last updated: 5 Juni 2026
 
 ---
 
@@ -8,7 +8,7 @@
 WAssist adalah platform otomasi pemesanan berbasis WhatsApp untuk UMKM Indonesia.
 Customer chat ke nomor WA bisnis → bot AI (Gemini) proses pesanan → generate QRIS → notif owner.
 **Hackathon:** Gunadarma Code Week 2.0, deadline submit **11 Juni 2026**. Target WAssist selesai: **8 Juni 2026** (buffer 3 hari).
-**Demo tenant:** Toko Olshop Mbak Rina (fashion store, 16 produk, `tenant_id: 3b0a38de-811c-40b5-af83-c866e198da12`, `owner_phone: +6285196133302`).
+**Demo tenant:** Toko Olshop Mbak Rina (fashion store, 16 produk, `tenant_id: 3b0a38de-811c-40b5-af83-c866e198da12`, `owner_phone: 6287715781238` ← nomor personal owner, format DB tanpa `+`, verified ✅).
 
 ---
 
@@ -101,12 +101,13 @@ wassist/
 │       ├── products.ts               ← getActiveProducts, getProductByName,
 │       │                                getProductByRetailerId, updateProductPrice,
 │       │                                updateProductStock, setProductReorderPoint,
-│       │                                setProductActive, decrementProductStock
+│       │                                setProductActive, decrementProductStock,
+│       │                                getProductsByTenantAll
 │       ├── orders.ts                 ← createOrder, updateOrderMidtrans, updateOrderStatus,
 │       │                                getOrderByMidtransId, getLatestOrderByCustomer,
-│       │                                getOrderItemsByOrderId
+│       │                                getOrderItemsByOrderId, getLastCompletedOrderWithItems
 │       ├── users.ts                  ← upsertCustomer, getUserIdByPhone, getUserById
-│       ├── tenants.ts                ← getTenantByWaPhoneId, setStoreStatus
+│       ├── tenants.ts                ← getTenantByWaPhoneId, setStoreStatus, getTenantById
 │       ├── analytics.ts              ← queryRevenueData, RevenueData type, parsePeriod
 │       └── index.ts                  ← re-export semua → import dari @/server/db
 ├── lib/                              # Pure utilities — NO DB queries di sini
@@ -124,8 +125,8 @@ wassist/
 │   │   ├── order-new.ts              ← handleOrderIntent() — slot-filling, guard toko tutup
 │   │   ├── clarification.ts          ← handleClarificationAnswer() — jawaban varian/qty
 │   │   ├── confirm-order.ts          ← processOrderConfirmation() — Midtrans QRIS + WA
+│   │   ├── repeat-last.ts            ← handleRepeatLastIntent() — re-order pesanan terakhir
 │   │   ├── cancel-order.ts           ← post-MVP
-│   │   ├── repeat-last.ts            ← post-MVP
 │   │   └── modify-order.ts           ← post-MVP
 │   ├── owner/
 │   │   ├── parser.ts                 ← parseOwnerCommand() via ownerParserModel
@@ -143,51 +144,146 @@ wassist/
 │   ├── response-template.ts          ← orderConfirmationMessage, dll
 │   └── utils.ts
 ├── scripts/
-│   └── test-intent.ts
+│   ├── test-intent.ts
+│   ├── delete-demo.sql        ← hapus semua data demo (jalankan SEBELUM seed)
+│   └── seed-demo.sql          ← seed data demo Olshop Mbak Rina (DO $$ block)
 └── next.config.ts                    ← WAJIB: output: "standalone"
 ```
 
 ---
 
-## Database Schema (Key Points)
+## Database Schema (Lengkap)
 
-### Tabel `products`
+> Semua kolom `id` menggunakan `DEFAULT gen_random_uuid()` — jangan pass `id` manual saat INSERT kecuali ada alasan khusus (contoh: tenant demo harus fix untuk match `DEMO_TENANT_ID`).
+
+### `tenants`
 ```sql
-CREATE TABLE products (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-  name TEXT NOT NULL,
-  price INTEGER NOT NULL,              -- Rupiah bulat, BUKAN float
-  stock NUMERIC(10,3) NOT NULL DEFAULT 0, -- NUMERIC: support 2.5 kg, 0.5 L
-  unit TEXT NOT NULL DEFAULT 'pcs',
-  reorder_point NUMERIC NOT NULL DEFAULT 0, -- batas minimum stok sebelum alert
-  is_active BOOLEAN NOT NULL DEFAULT true,
-  meta_retailer_id TEXT,               -- slug ke Meta Catalog, IMMUTABLE setelah di-set
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+CREATE TABLE tenants (
+  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name                TEXT NOT NULL,
+  owner_phone         TEXT NOT NULL UNIQUE,        -- format: 628xxx (tanpa +)
+  wa_business_phone_id TEXT,                       -- Meta Phone Number ID
+  plan                TEXT NOT NULL DEFAULT 'TRIAL'
+                      CHECK (plan IN ('TRIAL','STARTER','PRO','BUSINESS')),
+  status              TEXT NOT NULL DEFAULT 'ACTIVE'
+                      CHECK (status IN ('ACTIVE','INACTIVE','SUSPENDED')),
+  is_open             BOOLEAN NOT NULL DEFAULT true,
+  closed_until        TIMESTAMPTZ,
+  category            TEXT NOT NULL DEFAULT 'toko online',
+  meta_catalog_id     TEXT,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ```
 
-### Tabel `order_items`
+### `users`
+```sql
+CREATE TABLE users (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id   UUID NOT NULL REFERENCES tenants(id),
+  phone       TEXT NOT NULL,                        -- format: 628xxx
+  name        TEXT NOT NULL,
+  role        TEXT NOT NULL CHECK (role IN ('OWNER','CUSTOMER')),
+  last_seen   TIMESTAMPTZ DEFAULT now(),
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (tenant_id, phone)                         -- constraint: users_tenant_id_phone_key ✅ verified
+);
+```
+
+### `products`
+```sql
+CREATE TABLE products (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id        UUID NOT NULL REFERENCES tenants(id),
+  name             TEXT NOT NULL,
+  description      TEXT,
+  price            INTEGER NOT NULL,               -- Rupiah bulat, BUKAN float
+  stock            NUMERIC NOT NULL DEFAULT 0,     -- NUMERIC: support 2.5 kg, 0.5 L
+  unit             TEXT NOT NULL DEFAULT 'pcs',
+  category         TEXT,
+  is_active        BOOLEAN NOT NULL DEFAULT true,
+  image_url        TEXT,
+  meta_retailer_id TEXT,                           -- slug Meta Catalog, IMMUTABLE setelah di-set
+  reorder_point    NUMERIC NOT NULL DEFAULT 5,     -- alert stok menipis
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
+
+### `orders`
+```sql
+CREATE TABLE orders (
+  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id           UUID NOT NULL REFERENCES tenants(id),
+  customer_user_id    UUID NOT NULL REFERENCES users(id),
+  status              TEXT NOT NULL DEFAULT 'PENDING'
+                      CHECK (status IN ('PENDING','CONFIRMED','AWAITING_PAYMENT',
+                                        'PAID','FULFILLED','DONE','CANCELLED')),
+  total_amount        INTEGER NOT NULL DEFAULT 0,  -- Rupiah bulat
+  payment_method      TEXT DEFAULT 'QRIS',
+  payment_status      TEXT NOT NULL DEFAULT 'UNPAID'
+                      CHECK (payment_status IN ('UNPAID','PAID','REFUNDED','FAILED')),
+  midtrans_id         TEXT,                        -- format WA-XXXXXXXX-xxxx
+  midtrans_payment_url TEXT,                       -- fallback URL jika QR gagal dikirim
+  notes               TEXT,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
+
+### `order_items`
 ```sql
 CREATE TABLE order_items (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
-  product_id UUID NOT NULL REFERENCES products(id),
-  qty NUMERIC(10,3) NOT NULL CHECK (qty > 0),
-  price_at_order INTEGER NOT NULL,  -- SNAPSHOT harga saat order
-  unit TEXT NOT NULL DEFAULT 'pcs', -- snapshot satuan
-  size TEXT, notes TEXT
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  order_id       UUID NOT NULL REFERENCES orders(id),
+  product_id     UUID NOT NULL REFERENCES products(id),
+  qty            NUMERIC NOT NULL CHECK (qty > 0),  -- NUMERIC bukan INTEGER
+  price_at_order INTEGER NOT NULL,                  -- SNAPSHOT harga saat order
+  unit           TEXT NOT NULL DEFAULT 'pcs',       -- snapshot satuan
+  size           TEXT,
+  notes          TEXT,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
+
+### `wa_sessions` *(tidak dipakai aktif — session pakai in-memory Map)*
+```sql
+CREATE TABLE wa_sessions (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  phone        TEXT NOT NULL UNIQUE,
+  tenant_id    UUID NOT NULL UNIQUE REFERENCES tenants(id),
+  state        TEXT NOT NULL DEFAULT 'IDLE',
+  context_json JSONB NOT NULL DEFAULT '{}',
+  expires_at   TIMESTAMPTZ NOT NULL DEFAULT now() + INTERVAL '30 minutes',
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
+
+### `ai_conversations` *(logging only, belum dipakai)*
+```sql
+CREATE TABLE ai_conversations (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id    UUID NOT NULL REFERENCES tenants(id),
+  user_phone   TEXT NOT NULL,
+  messages_json JSONB NOT NULL DEFAULT '[]',
+  intent       TEXT,
+  model_used   TEXT,
+  confidence   FLOAT,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ```
 
 ### Status Flow Orders
 ```
 PENDING → AWAITING_PAYMENT → PAID → FULFILLED → DONE
-CANCELLED ← (dari PENDING saja)
+                                  ↘ CANCELLED (dari PENDING saja)
 ```
-- `midtrans_id` — format `WA-XXXXXXXX-xxxx`, untuk reconcile callback
-- `midtrans_payment_url` — fallback URL jika QR image gagal dikirim
+
+### Aturan INSERT Seed / Test Data
+- **Jangan pass kolom `id`** kecuali tenant demo (harus match `DEMO_TENANT_ID`)
+- **Seed script: jangan pakai `ON CONFLICT (tenant_id, phone)`** — seed harus DELETE dulu agar idempotent (lihat `scripts/delete-demo.sql` + `scripts/seed-demo.sql`)
+- **Aplikasi (`upsertCustomer`)**: constraint `users_tenant_id_phone_key` UNIQUE ada di DB → `onConflict: "tenant_id,phone"` aman dipakai
+- Gunakan `DO $$ DECLARE ... BEGIN ... END $$` + `RETURNING id INTO v_xxx` untuk cross-referencing FK
 
 ### TypeScript Types (`lib/types/db.ts`)
 ```typescript
@@ -218,9 +314,9 @@ order_new       → customer ingin pesan produk baru
 browse          → ingin lihat katalog
 order_status    → tanya status pesanan
 greeting        → sapaan tanpa intent belanja → template sambutan
-repeat_last     → post-MVP → low_confidence
-modify_order    → post-MVP → low_confidence
-cancel_order    → post-MVP → low_confidence
+repeat_last     → ✅ handleRepeatLastIntent() — re-order pesanan terakhir
+cancel_order    → ✅ cancelOrderMessage() template — info cara batal
+modify_order    → post-MVP → handoff ke owner
 low_confidence  → tidak jelas / di luar konteks → handoff ke owner
 ```
 
@@ -338,14 +434,29 @@ CANCEL_KEYWORDS.has(normalized)   // "batal", "tidak", "gak", "cancel", dll
 ### Alur `processOrderConfirmation()` (di `lib/handlers/confirm-order.ts` — ✅ DONE)
 ```
 1. getUserIdByPhone()             → userId
-2. createOrder(tenantId, userId, items, total) → orderId
-3. createQrisPayment({ totalAmount, customerPhone }) → { midtransId, paymentUrl, qrImageUrl }
+2. createQrisPayment({ totalAmount, customerPhone }) → { midtransId, paymentUrl, qrString }
+   ← FAST-FAIL sebelum createOrder: tidak ada orphan order jika Midtrans gagal
+   ← paymentUrl SELALU kosong untuk QRIS Core API (bukan Snap) — tidak ada redirect_url
+   ← qrString = raw QRIS data string dari response Midtrans
+3. createOrder(tenantId, userId, items, total) → orderId
 4. updateOrderMidtrans(orderId, midtransId, paymentUrl)
-5. fetch(qrImageUrl) → Buffer → uploadWhatsAppMedia → media_id
-6. sendWhatsAppImageMessage(...)  → [try/catch: fallback ke paymentLinkMessage]
-7. sendWhatsAppMessage(owner_phone, notif)
-8. setSession → awaiting_payment + current_order_id
+5. QRCode.toBuffer(qrString) → Buffer PNG lokal (npm package `qrcode`)
+   ← Generate lokal, bukan fetch dari Midtrans URL (URL sering return corrupt 1.7KB image)
+6. uploadWhatsAppMedia(buffer, "image/png") → media_id
+7. sendWhatsAppImageMessage(...) → cek result.success
+   ← Jika success: TIDAK kirim teks lagi (hindari duplicate)
+   ← Jika false: fallback ke paymentLinkMessage (teks + catatan "scan QR yang sudah dikirim")
+8. sendWhatsAppMessage(owner_phone, notif)
+9. setSession → awaiting_payment + current_order_id
 ```
+
+### Sandbox QR — TIDAK bisa di-scan dengan app nyata
+- `qr_string` sandbox berisi merchant ID sandbox — tidak terdaftar di jaringan QRIS produksi
+- Real payment app (GoPay, OVO, DANA) → reject "merchant tidak ditemukan"
+- **Cara simulate pembayaran sandbox:** buka `https://simulator.sandbox.midtrans.com/qris/index`
+  → masukkan `order_id` (format `WA-XXXXXXXX-xxxx`) → klik Approve
+  → Midtrans kirim callback ke `/api/webhook/midtrans` → order status → PAID ✅
+- Untuk demo: scan QR tunjukkan ke juri bahwa QR muncul, lalu buka simulator untuk trigger PAID
 
 ### Midtrans Callback (`app/api/webhook/midtrans/route.ts`)
 - Selalu return 200 — Midtrans retry jika dapat non-2xx
@@ -400,9 +511,9 @@ const product = await getProductByRetailerId(tenant.id, cartItem.product_retaile
 | Midtrans callback webhook | ✅ | `app/api/webhook/midtrans/route.ts` |
 | Dashboard: home + orders + products + analytics | ✅ | `app/dashboard/`, `components/dashboard/` |
 | All API routes (kpi, orders, products) | ✅ | `app/api/dashboard/`, `app/api/orders/` |
-| cancel_order | ❌ Cut → low_confidence | post-MVP |
-| repeat_last | ❌ Cut → low_confidence | post-MVP |
-| modify_order | ❌ Cut → low_confidence | post-MVP |
+| cancel_order | ✅ | `lib/response-template.ts` → `cancelOrderMessage()` |
+| repeat_last | ✅ | `lib/handlers/repeat-last.ts` → `handleRepeatLastIntent()` |
+| modify_order | ❌ post-MVP → handoff | — |
 
 ---
 
@@ -440,31 +551,45 @@ const product = await getProductByRetailerId(tenant.id, cartItem.product_retaile
 
 ---
 
-## Remaining Items (per 4 Juni 2026)
+## Remaining Items (per 5 Juni 2026)
 
-### Critical (demo blocker)
-- **ngrok + Meta webhook setup** sebelum demo
-- End-to-end test bot dari WA real device
-- Seed demo data (order PAID, stok bervariasi)
+### Critical — demo blocker
+- [ ] Cloud Run deploy + update Meta Developer Console webhook URL
+- [ ] End-to-end test bot dari WA real device setelah deploy
+- [ ] Jalankan `scripts/delete-demo.sql` + `scripts/seed-demo.sql` di Supabase sebelum demo
 
-### Dashboard UI
+### Bug & Architecture — SELESAI ✅
+- ✅ Architecture violations: inline `supabaseAdmin` di routes/handlers → extract ke `server/db/`
+- ✅ `activate_product` bug: fetch all products incl. inactive
+- ✅ `processOrderConfirmation` try-catch
+- ✅ Partial stock decrement per-item catch
+- ✅ `repeat_last` intent: full handler + DB function
+- ✅ `cancel_order` intent: dedicated template
+- ✅ Midtrans sandbox key wrong → fix `.env.local` dengan key dari dashboard.sandbox.midtrans.com
+- ✅ Orphan order jika Midtrans fail → reorder: `createQrisPayment` sebelum `createOrder`
+- ✅ `qrSent = true` unconditional → cek `result.success` dari `sendWhatsAppImageMessage`
+- ✅ Midtrans QR image URL butuh auth → tambah `Authorization: Basic` header di fetch
+- ✅ `uploadWhatsAppMedia` pakai Web API FormData → ganti npm `form-data` package
+- ✅ `paymentLinkMessage` leading whitespace + empty URL → fix template literal + guard URL kosong
+- ✅ `awaiting_confirmation` fallback message → `confirmationPendingMessage()` template
+
+### Dashboard UI — SELESAI ✅
 - ✅ Bottom navigation bar + dynamic navbar title
-- ✅ `design.md` + `globals.css` fix (duplicate import, unified tokens)
-- ✅ `StatusBadge` color fix (selesai→green, diproses→blue, pending→amber)
-- ✅ `KPICard` background fix
+- ✅ `design.md` + `globals.css` fix
+- ✅ `StatusBadge` color fix, `KPICard` bg fix
 - ✅ Stub pages: `/dashboard/settings`, `/dashboard/account`
-- [ ] Toast notifications untuk aksi (finish order, dll)
-- [ ] Empty states saat data kosong
 
 ### Nice-to-have
-- `GET /api/orders/[id]` — masih 501
-- Upload product images ke Supabase Storage
-- KPI `change` prop (prior-period comparison)
+- [ ] Toast notifications untuk aksi (finish order)
+- [ ] Empty states saat data kosong
+- [ ] `GET /api/orders/[id]` — masih 501
+- [ ] Upload product images ke Supabase Storage
+- [ ] KPI `change` prop (perbandingan periode)
 
 ### Post-Hackathon
 - Auth Opsi B: magic link JWT via `jose`
 - Meta Catalog full setup
-- Cloud Run deploy
+- Redis session (sekarang in-memory Map)
 
 ---
 
@@ -582,6 +707,15 @@ Wajib tambah **handler file** di `lib/handlers/` (satu file per intent besar).
 ❌ META_PHONE_NUMBER_ID berisi nomor HP → isi Meta Phone Number ID dari dashboard
 ❌ Update intent di customer-parser.ts saja → WAJIB update models.ts (systemInstruction + enum) sekaligus
 ❌ Tambah fungsi DB baru tanpa export di server/db/index.ts → handler tidak bisa import
+❌ Pass kolom `id` di seed/test INSERT → biarkan DB generate via DEFAULT gen_random_uuid()
+❌ ON CONFLICT (tenant_id, phone) di SEED SCRIPT → seed harus DELETE dulu; tapi di upsertCustomer (aplikasi) ini VALID karena constraint ada
+❌ Web API FormData + Blob untuk uploadWhatsAppMedia → pakai npm `form-data` + `form.getBuffer()` + `form.getHeaders()`
+❌ sendWhatsAppImageMessage return diabaikan → WAJIB cek `result.success`; fungsi tidak throw, hanya return { success: false }
+❌ fetch(midtrans_qr_url) untuk QR image → URL Midtrans return corrupt ~1.7KB; pakai `qr_string` dari response + npm `qrcode` generate PNG lokal
+❌ Scan QR sandbox dengan app nyata (GoPay/OVO/DANA) → merchant sandbox tidak di jaringan QRIS produksi; simulate via simulator.sandbox.midtrans.com/qris/index
+❌ owner_phone dengan `+` prefix di DB → format wajib `628xxx` tanpa `+` (verified: 6287715781238 ✅)
+❌ owner_phone diisi nomor WA Business → harus nomor personal owner (beda dari META_PHONE_NUMBER_ID)
+❌ Meta test mode: kirim WA ke nomor yang belum pernah chat bot → harus tambah sebagai test recipient di Meta Developer Console (WhatsApp → API Setup → "To" field) ATAU nomor harus kirim pesan ke bot dulu dalam 24 jam
 ```
 
 ---

@@ -4,8 +4,13 @@ import { getProductsByTenantAll,
          setProductReorderPoint,
          setProductActive,
          setStoreStatus,
-         queryRevenueData }           from "@/server/db";
+         queryRevenueData,
+         getLatestOrderByStatus,
+         updateOrderStatus,
+         getUserById }                from "@/server/db";
 import { sendWhatsAppMessage }        from "@/lib/whatsapp";
+import { fulfillmentNotificationMessage,
+         orderDoneNotificationMessage } from "@/lib/response-template";
 import { generateRevenueResponse }    from "@/lib/owner/generator";
 import { parseOwnerCommand }          from "@/lib/owner/parser";
 import { setSession, clearSession }   from "@/lib/session";
@@ -93,6 +98,38 @@ export async function handleOwnerCommand(
       await setStoreStatus(tenant.id, false);
       await sendWhatsAppMessage(ownerPhone, "🔒 Toko *tutup*. Balas *buka* untuk buka lagi.");
       break;
+
+    case "mark_fulfilled": {
+      const order = await getLatestOrderByStatus(tenant.id, "PAID");
+      if (!order) {
+        await sendWhatsAppMessage(ownerPhone, "Tidak ada order yang menunggu pengiriman saat ini 📭");
+        break;
+      }
+      await updateOrderStatus(order.id, "FULFILLED");
+      const displayId = order.midtrans_id ?? order.id.slice(-6).toUpperCase();
+      const customer = await getUserById(order.customer_user_id);
+      if (customer?.phone) {
+        await sendWhatsAppMessage(customer.phone, fulfillmentNotificationMessage(displayId));
+      }
+      await sendWhatsAppMessage(ownerPhone, `✅ Order *${displayId}* ditandai *dikirim* — customer sudah dinotifikasi 🚚`);
+      break;
+    }
+
+    case "mark_done": {
+      const order = await getLatestOrderByStatus(tenant.id, "FULFILLED");
+      if (!order) {
+        await sendWhatsAppMessage(ownerPhone, "Tidak ada order dalam pengiriman saat ini 📭");
+        break;
+      }
+      await updateOrderStatus(order.id, "DONE");
+      const displayId = order.midtrans_id ?? order.id.slice(-6).toUpperCase();
+      const customer = await getUserById(order.customer_user_id);
+      if (customer?.phone) {
+        await sendWhatsAppMessage(customer.phone, orderDoneNotificationMessage(displayId));
+      }
+      await sendWhatsAppMessage(ownerPhone, `✅ Order *${displayId}* ditandai *selesai* — customer sudah dinotifikasi 🎉`);
+      break;
+    }
 
     // ── MUTASI (wajib konfirmasi) ──────────────────────────────────────────
     case "update_price": {
@@ -204,7 +241,9 @@ export async function handleOwnerCommand(
         `📥 *Update stok*: "stok kaos jadi 20" / "tambah stok kaos 5"\n` +
         `🔔 *Batas stok*: "batas stok kaos 5"\n` +
         `🚫 *Nonaktifkan*: "nonaktifkan kaos oversize"\n` +
-        `🟢 *Toko*: "buka" / "tutup"\n\n` +
+        `🟢 *Toko*: "buka" / "tutup"\n` +
+        `🚚 *Kirim*: "sudah dikirim" / "kirim order"\n` +
+        `✅ *Selesai*: "order selesai" / "sudah diterima"\n\n` +
         `_Nomor produk merujuk ke urutan katalog aktif._`
       );
       break;

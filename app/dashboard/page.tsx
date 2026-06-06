@@ -14,6 +14,7 @@ type KpiData = {
 type OrderRow = {
   order_id: string;
   customer: string;
+  customer_phone: string;
   total: number;
   status: "pending" | "diproses" | "selesai";
 };

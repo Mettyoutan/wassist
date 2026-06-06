@@ -10,9 +10,10 @@ import {
   sendWhatsAppImageMessage,
 }                                                    from "@/lib/whatsapp";
 import { setSession }                                from "@/lib/session";
-import { paymentLinkMessage }                        from "@/lib/response-template";
+import { paymentLinkMessage, qrPaymentCaption }       from "@/lib/response-template";
 import type { DbTenant }                             from "@/lib/types/db";
 import type { Session }                              from "@/lib/types/session";
+import QRCode from "qrcode"
 
 export async function processOrderConfirmation(
   tenant:      DbTenant,
@@ -35,40 +36,49 @@ export async function processOrderConfirmation(
     return;
   }
 
-  // 2. Buat order di DB
-  const { orderId } = await createOrder(tenant.id, userId, items, total);
-
-  // 3. Charge Midtrans QRIS
-  const { midtransId, paymentUrl, qrImageUrl } = await createQrisPayment({
+  // 2. Charge Midtrans QRIS dulu — fast-fail sebelum ada DB side effect.
+  const { midtransId, paymentUrl, qrString } = await createQrisPayment({
     totalAmount:   total,
     customerPhone: senderPhone,
   });
 
+  // 3. Buat order di DB (hanya setelah Midtrans berhasil)
+  const { orderId } = await createOrder(tenant.id, userId, items, total);
+
   // 4. Update order dengan data Midtrans
   await updateOrderMidtrans(orderId, midtransId, paymentUrl);
 
-  // 5. Kirim QR image — fallback ke link teks jika gagal
+  // 5. Generate QR lokal dari qr_string. Jika berhasil, kirim image saja (tanpa teks duplikat).
+  // Jika gagal, fallback ke teks paymentLinkMessage.
   let qrSent = false;
-  if (qrImageUrl) {
+  if (qrString) {
     try {
-      const imgRes = await fetch(qrImageUrl);
-      if (imgRes.ok) {
-        const buffer  = Buffer.from(await imgRes.arrayBuffer());
-        const mediaId = await uploadWhatsAppMedia(buffer);
-        await sendWhatsAppImageMessage(
-          senderPhone,
-          mediaId,
-          `💳 Scan QR untuk bayar kak 😊\n*Total: Rp${total.toLocaleString("id-ID")}*\n_Berlaku 15 menit_`
-        );
-        qrSent = true;
-      }
+      const qrBuffer = await QRCode.toBuffer(qrString, {
+        type:   "png",
+        width:  400,
+        margin: 2,
+        color:  { dark: "#000000", light: "#FFFFFF" },
+      });
+      console.log("[confirmOrder] QR local generate size:", qrBuffer.length, "bytes");
+
+      const mediaId = await uploadWhatsAppMedia(qrBuffer, "image/png");
+      console.log("[confirmOrder] WA media_id:", mediaId);
+
+      const result = await sendWhatsAppImageMessage(
+        senderPhone,
+        mediaId,
+        qrPaymentCaption(total, midtransId)
+      );
+      qrSent = result.success;
+      console.log("[confirmOrder] sendWhatsAppImageMessage result:", result.success);
     } catch (err) {
-      console.warn("[confirmOrder] QR image send failed, fallback to link:", err);
+      console.warn("[confirmOrder] QR image send failed:", err);
     }
   }
 
+  // Kirim teks hanya jika QR image gagal — hindari pesan duplikat
   if (!qrSent) {
-    await sendWhatsAppMessage(senderPhone, paymentLinkMessage(total, paymentUrl));
+    await sendWhatsAppMessage(senderPhone, paymentLinkMessage(total, paymentUrl, midtransId));
   }
 
   // 6. Notif owner

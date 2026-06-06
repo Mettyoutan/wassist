@@ -10,6 +10,7 @@ interface OrderDetail {
   id: string;
   orderCode: string;
   customer: string;
+  customer_phone: string;
   status: Status;
   date: string;
   items: { name: string; qty: number }[];

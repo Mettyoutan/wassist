@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse }    from "next/server";
 import { getTenantByWaPhoneId,
          upsertCustomer,
-         getActiveProducts }             from "@/server/db";
+         getActiveProducts,
+         updateOrderStatus }             from "@/server/db";
 import { getSession,
          clearSession }                  from "@/lib/session";
 import { parseCustomerMessage }          from "@/lib/ai/customer-parser";
@@ -9,7 +10,10 @@ import { sendWhatsAppMessage }           from "@/lib/whatsapp";
 import { CONFIRM_KEYWORDS,
          CANCEL_KEYWORDS }               from "@/lib/constants/confirmation-keywords";
 import { greetingMessage,
-         cancelOrderMessage }            from "@/lib/response-template";
+         cancelOrderMessage,
+         confirmationPendingMessage,
+         modifyOrderInConfirmationMessage,
+         modifyOrderHandoffMessage }    from "@/lib/response-template";
 import { handleBrowseIntent }            from "@/lib/handlers/browse";
 import { handleStatusIntent }            from "@/lib/handlers/status";
 import { handleHandoffIntent }           from "@/lib/handlers/handoff";
@@ -78,14 +82,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ status: "ok" });
     }
 
+    // Get WA message
     const textMsg    = message as WATextMessage;
     const msgText    = textMsg.text.body;
+
+    // Get current session
     const session    = getSession(tenant.id, senderPhone);
 
     // ── STATE MACHINE — cek dulu sebelum Gemini ──────────────────────────────
     if (session.state === "awaiting_confirmation") {
       const normalized = msgText.toLowerCase().trim();
 
+      // Cek confirmation dengan keywords
       if (CONFIRM_KEYWORDS.has(normalized)) {
         try {
           await processOrderConfirmation(tenant, senderPhone, session);
@@ -105,11 +113,25 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ status: "ok" });
       }
 
-      // Bukan confirm/cancel → minta klarifikasi
-      await sendWhatsAppMessage(
-        senderPhone,
-        "Balas *ya* untuk konfirmasi atau *batal* untuk membatalkan pesanan ya kak 😊"
-      );
+      // Bukan confirm/cancel → coba parse sebagai tambah item ke pesanan aktif
+      const productsForAdd = await getActiveProducts(tenant.id);
+      const parsedAdd = await parseCustomerMessage(msgText, productsForAdd, {
+        store_name:     tenant.name,
+        store_category: tenant.category ?? "toko online",
+        current_order:  session.pending_order?.items.map(i => ({
+          name: i.name, qty: i.qty, size: i.size,
+        })),
+      });
+      if (parsedAdd.intent === "order_new" && parsedAdd.items.length > 0) {
+        await handleOrderIntent(
+          tenant, senderPhone, productsForAdd, parsedAdd.items,
+          session.pending_order?.items ?? []
+        );
+      } else if (parsedAdd.intent === "modify_order") {
+        await sendWhatsAppMessage(senderPhone, modifyOrderInConfirmationMessage());
+      } else {
+        await sendWhatsAppMessage(senderPhone, confirmationPendingMessage());
+      }
       return NextResponse.json({ status: "ok" });
     }
 
@@ -125,6 +147,19 @@ export async function POST(request: NextRequest) {
     }
 
     if (session.state === "awaiting_payment") {
+      const normalized = msgText.toLowerCase().trim();
+      if (CANCEL_KEYWORDS.has(normalized)) {
+        if (session.current_order_id) {
+          try {
+            await updateOrderStatus(session.current_order_id, "CANCELLED");
+          } catch (err) {
+            console.error("[Webhook] cancel order in awaiting_payment failed:", err);
+          }
+        }
+        clearSession(tenant.id, senderPhone);
+        await sendWhatsAppMessage(senderPhone, "Pesanan dibatalkan ya kak 👍 Ketik *menu* kalau mau lihat katalog lagi.");
+        return NextResponse.json({ status: "ok" });
+      }
       await sendWhatsAppMessage(
         senderPhone,
         "Pesananmu masih menunggu pembayaran ya kak 💳 Silakan scan QR yang sudah dikirim."
@@ -175,8 +210,15 @@ export async function POST(request: NextRequest) {
         await sendWhatsAppMessage(senderPhone, cancelOrderMessage());
         break;
 
-      // Post-MVP + low confidence → handoff
       case "modify_order":
+        await sendWhatsAppMessage(senderPhone, modifyOrderHandoffMessage());
+        await sendWhatsAppMessage(
+          tenant.owner_phone,
+          `⚠️ ${senderPhone} ingin modifikasi pesanan — perlu penanganan manual.`
+        );
+        break;
+
+      // low confidence → generic handoff
       case "low_confidence":
       default:
         await handleHandoffIntent(tenant, senderPhone);

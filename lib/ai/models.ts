@@ -87,6 +87,8 @@ ACTION (pilih tepat satu):
 - activate_product  : aktifkan kembali produk yang sebelumnya dinonaktifkan
 - open_store        : buka toko
 - close_store       : tutup toko
+- mark_fulfilled    : tandai order sudah dikirim / dalam pengiriman (status PAID → FULFILLED), notif customer
+- mark_done         : tandai order sudah selesai / diterima customer (status FULFILLED → DONE), notif customer
 - help              : minta bantuan atau daftar perintah
 - unknown           : perintah tidak jelas atau di luar daftar
 
@@ -106,7 +108,7 @@ ATURAN OUTPUT:
         action: {
           type: SchemaType.STRING,
           format: "enum",
-          enum: ["get_revenue","get_stock","update_price","update_stock","set_reorder_point","deactivate_product","activate_product","open_store","close_store","help","unknown"],
+          enum: ["get_revenue","get_stock","update_price","update_stock","set_reorder_point","deactivate_product","activate_product","open_store","close_store","mark_fulfilled","mark_done","help","unknown"],
         },
         product_index: { type: SchemaType.INTEGER },
         value:         { type: SchemaType.NUMBER },

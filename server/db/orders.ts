@@ -109,7 +109,7 @@ export async function getOrderItemsByOrderId(orderId: string): Promise<DbOrderIt
     .select("*")
     .eq("order_id", orderId);
 
-  if (error) console.error("[DB] getOrderItemsByOrderId:", error.message);
+  if (error) throw new Error(`[DB] getOrderItemsByOrderId: ${error.message}`);
   return (data as DbOrderItem[]) ?? [];
 }
 
@@ -138,6 +138,7 @@ export type OrderWithDetails = {
   total_amount: number;
   created_at: string;
   customer_phone: string;
+  customer_name: string;
   items: Array<{
     qty: number;
     price_at_order: number;
@@ -156,7 +157,7 @@ export async function getOrdersByTenant(
     .from("orders")
     .select(`
       id, midtrans_id, status, payment_status, total_amount, created_at,
-      users!orders_customer_user_id_fkey(phone),
+      users!orders_customer_user_id_fkey(phone, name),
       order_items(qty, price_at_order, unit, products(name))
     `)
     .eq("tenant_id", tenantId)
@@ -181,6 +182,7 @@ export async function getOrdersByTenant(
     total_amount:   row.total_amount,
     created_at:     row.created_at,
     customer_phone: row.users?.phone ?? "",
+    customer_name:  row.users?.name ?? "",
     items: ((row.order_items ?? []) as any[]).map((oi: any) => ({
       qty:            oi.qty,
       price_at_order: oi.price_at_order,
@@ -198,6 +200,27 @@ export type LastOrderItem = {
   size:         string | null;
   notes:        string | null;
 };
+
+// Fetch order terbaru dengan status tertentu — dipakai owner mark_fulfilled/mark_done.
+export async function getLatestOrderByStatus(
+  tenantId: string,
+  status:   DbOrder["status"]
+): Promise<DbOrder | null> {
+  const { data, error } = await supabaseAdmin
+    .from("orders")
+    .select("*")
+    .eq("tenant_id", tenantId)
+    .eq("status", status)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .single();
+
+  if (error) {
+    if (error.code !== "PGRST116") console.error("[DB] getLatestOrderByStatus:", error.message);
+    return null;
+  }
+  return data as DbOrder;
+}
 
 export async function getLastCompletedOrderWithItems(
   tenantId: string,

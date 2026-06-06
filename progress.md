@@ -7,7 +7,7 @@
 ## Status Umum
 - **Deadline submit:** 11 Juni 2026
 - **Target selesai:** 8 Juni 2026
-- **Last updated:** 5 Juni 2026
+- **Last updated:** 6 Juni 2026
 - **Build status:** ✅ 0 TypeScript error (`npm run build` clean)
 - **Deploy status:** ❌ Belum di-deploy ke Cloud Run (BLOCKER)
 
@@ -26,6 +26,9 @@
 - [x] `lib/handlers/owner.ts` — 11 owner actions + mutation confirmation flow
 - [x] `lib/handlers/cart-order.ts` — Cart dari WA Catalog (meta order type)
 - [x] `lib/handlers/repeat-last.ts` — repeat_last: fetch last PAID order, re-verify stok+harga, set awaiting_confirmation ✅ 2026-06-05
+- [x] `lib/handlers/status.ts` — tampil midtrans_id + CONFIRMED/AWAITING_PAYMENT messages ✅ 2026-06-06
+- [x] `modify_order` intent — contextual messages (dalam confirmation vs idle) ✅ 2026-06-06
+- [x] Owner `mark_fulfilled` + `mark_done` via WA — notif customer otomatis ✅ 2026-06-06
 
 ### AI / LLM
 - [x] `lib/ai/models.ts` — 3 model Gemini (customerParser 0.1, ownerParser 0.1, generator 0.4)
@@ -55,10 +58,31 @@
 - [x] `server/db/orders.ts` — getOrdersByTenant (with nested join users + order_items)
 - [x] `server/db/products.ts` — getProductsForDashboard (id, name, price, unit, stock, reorder_point, image_url)
 - [x] Semua fungsi DB lain (createOrder, updateOrderMidtrans, dll)
+- [x] `server/db/tenants.ts` — + `getTenantById()` ✅ 2026-06-05
+- [x] `server/db/products.ts` — + `getProductsByTenantAll()` ✅ 2026-06-05
+- [x] `server/db/orders.ts` — + `getLastCompletedOrderWithItems()` + `LastOrderItem` type ✅ 2026-06-05
 
 ---
 
 ## 🐛 BUG DITEMUKAN — semua sudah fix
+
+### Bug 10 — QR image tidak muncul di WA customer [CRITICAL]
+- **File:** `lib/handlers/confirm-order.ts`, `lib/midtrans.ts`
+- **Masalah:** Fetch dari Midtrans `generate-qr-code` URL return image corrupt (~1.7KB) → Meta terima upload tapi WA tidak bisa render → customer tidak lihat QR
+- **Fix:** Ekstrak `qr_string` dari Midtrans response → generate PNG lokal via npm `qrcode` (400px, proper size ~8-15KB)
+- **Status:** ✅ Fixed 2026-06-06
+
+### Bug 11 — Duplicate payment message (QR image + teks fallback) [HIGH]
+- **File:** `lib/handlers/confirm-order.ts`
+- **Masalah:** Setelah QR image berhasil dikirim, teks `paymentLinkMessage` tetap dikirim → customer dapat 2 pesan
+- **Fix:** `qrSent` flag — kirim teks hanya jika `sendWhatsAppImageMessage` return `success: false`
+- **Status:** ✅ Fixed 2026-06-06
+
+### Bug 12 — `paymentLinkMessage` selalu kosong URL [MEDIUM]
+- **File:** `lib/response-template.ts`, `lib/midtrans.ts`
+- **Masalah:** Midtrans QRIS Core API tidak pernah return `redirect_url` → `paymentUrl` selalu `""` → URL line hilang dari pesan
+- **Fix:** Fallback text "Scan QR code yang sudah dikirim ya kak 📱" ketika URL kosong; dokumentasikan di anti-patterns
+- **Status:** ✅ Fixed 2026-06-06
 
 ### Bug 6 — activate_product tidak bisa pilih produk nonaktif [HIGH]
 - **File:** `lib/handlers/owner.ts` baris 33-38
@@ -144,7 +168,8 @@
 - [x] /dashboard/settings — stub page ✅ 2026-06-04
 - [x] /dashboard/account — stub page dengan info tenant ✅ 2026-06-04
 - [ ] Upload product images ke Supabase Storage
-- [ ] Seed demo data: order PAID + stok bervariasi (ada yang menipis)
+- [x] Seed demo data: `scripts/seed-demo.sql` (DO $$ block, gen_random_uuid via DEFAULT) ✅ 2026-06-05
+- [x] `scripts/delete-demo.sql` — clean delete berurutan tanpa CASCADE ✅ 2026-06-05
 
 ### LOW — nice to have
 - [ ] `GET /api/orders/[id]` — detail endpoint (masih 501)
@@ -162,7 +187,36 @@
 
 ## 📝 Catatan Sesi
 
-### 2026-06-05
+### 2026-06-06 (sesi 2)
+- Fix: `lib/handlers/status.ts` → tampil `midtrans_id` (format WA-xxx) bukan UUID slice; tambah CONFIRMED + AWAITING_PAYMENT ke statusMessages
+- Feat: `modify_order` intent → pesan kontekstual (dalam `awaiting_confirmation` vs idle), owner auto-dinotif saat idle
+- Feat: owner `mark_fulfilled` via WA ("sudah dikirim") → PAID→FULFILLED + notif customer
+- Feat: owner `mark_done` via WA ("order selesai") → FULFILLED→DONE + notif customer
+- New: `getLatestOrderByStatus()` di `server/db/orders.ts`, update 3 tempat Gemini enum sekaligus
+- New: `fulfillmentNotificationMessage()` + `orderDoneNotificationMessage()` di `lib/response-template.ts`
+- Feat: cancel dari `awaiting_payment` → updateOrderStatus(CANCELLED) + clearSession
+- Feat: add items saat `awaiting_confirmation` → merge ke pending_order via `existingItems` param
+- Docs: `docs/wa-commands-reference.md` — referensi semua command customer + owner
+- Build ✅ 0 TypeScript error, 17 routes
+
+### 2026-06-06 (sesi 1)
+- Fix Bug 10: QR image → generate lokal dari `qr_string` via npm `qrcode` (bukan fetch Midtrans URL)
+- Fix Bug 11: duplicate payment message → `qrSent` flag, teks fallback hanya jika QR gagal
+- Fix Bug 12: `paymentLinkMessage` URL kosong → fallback text "scan QR yang sudah dikirim"
+- Added `qrString` field ke `QrisPaymentResult` type di `lib/midtrans.ts`
+- `uploadWhatsAppMedia` terima `contentType` param (opsional, default `image/png`)
+- Installed npm `qrcode` + `@types/qrcode`
+- Sandbox QR: tidak bisa di-scan dengan app nyata → simulate via `simulator.sandbox.midtrans.com/qris/index`
+- CLAUDE.md: update payment flow + sandbox QR note + anti-patterns
+- Build ✅ 0 TypeScript error, 17 routes
+
+### 2026-06-05 (sesi 2)
+- CLAUDE.md: full DB schema semua 7 tabel, aturan INSERT seed, update folder structure
+- `scripts/seed-demo.sql`: rewrite DO $$ block, hapus manual id dari users/products/orders
+- `scripts/delete-demo.sql`: baru — clean delete berurutan (order_items→orders→products→users→tenants)
+- Build ✅ 0 TypeScript error
+
+### 2026-06-05 (sesi 1)
 - Fix Bug 6-9: architecture violations + runtime bugs + intent improvements
 - Added `getTenantById()` → `server/db/tenants.ts`
 - Added `getProductsByTenantAll()` → `server/db/products.ts`

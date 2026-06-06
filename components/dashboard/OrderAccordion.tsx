@@ -11,6 +11,7 @@ interface OrderDetail {
   id: string;
   orderCode: string;
   customer: string;
+  customer_phone: string;
   status: Status;
   date: string;
   items: OrderItem[];
@@ -40,7 +41,7 @@ export default function OrderAccordion({
                 </span>
               </div>
               <a
-                href={`https://wa.me/${order.customer.replace(/\D/g, "")}`}
+                href={`https://wa.me/${order.customer_phone}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="btn btn-sm p-0 text-success"
