@@ -134,6 +134,58 @@ export async function getOrderByMidtransId(midtransId: string): Promise<DbOrder 
   return data as DbOrder;
 }
 
+export type ActiveOrderWithItems = {
+  id:           string;
+  midtrans_id:  string | null;
+  status:       DbOrder["status"];
+  total_amount: number;
+  created_at:   string;
+  items: Array<{
+    product_name:   string;
+    qty:            number;
+    unit:           string;
+    price_at_order: number;
+  }>;
+};
+
+// Fetch order terbaru NON-CANCELLED + items — untuk handleStatusIntent.
+export async function getLatestActiveOrderWithItems(
+  tenantId: string,
+  userId:   string
+): Promise<ActiveOrderWithItems | null> {
+  const { data, error } = await supabaseAdmin
+    .from("orders")
+    .select(`
+      id, midtrans_id, status, total_amount, created_at,
+      order_items(qty, price_at_order, unit, products(name))
+    `)
+    .eq("tenant_id", tenantId)
+    .eq("customer_user_id", userId)
+    .not("status", "eq", "CANCELLED")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .single();
+
+  if (error) {
+    if (error.code !== "PGRST116") console.error("[DB] getLatestActiveOrderWithItems:", error.message);
+    return null;
+  }
+
+  return {
+    id:           data.id,
+    midtrans_id:  data.midtrans_id ?? null,
+    status:       data.status as DbOrder["status"],
+    total_amount: data.total_amount,
+    created_at:   data.created_at,
+    items: ((data as any).order_items ?? []).map((oi: any) => ({
+      product_name:   oi.products?.name ?? "",
+      qty:            oi.qty,
+      unit:           oi.unit,
+      price_at_order: oi.price_at_order,
+    })),
+  };
+}
+
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 
 export type OrderWithDetails = {

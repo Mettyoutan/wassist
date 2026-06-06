@@ -164,3 +164,30 @@ export function orderDoneNotificationMessage(orderId: string): string {
     `Terima kasih sudah belanja! Sampai ketemu lagi 💚`
   );
 }
+
+export function orderStatusMessage(
+  displayId: string,
+  status:    string,
+  items:     Array<{ product_name: string; qty: number; unit: string }>,
+  total:     number
+): string {
+  const statusLabels: Record<string, string> = {
+    PENDING:          "Menunggu konfirmasi 🕐",
+    CONFIRMED:        "Dikonfirmasi, sedang dipersiapkan 👍",
+    AWAITING_PAYMENT: "Menunggu pembayaran 💳 Scan QR yang sudah dikirim ya kak.",
+    PAID:             "Pembayaran diterima, sedang diproses 🎉",
+    FULFILLED:        "Sedang dalam pengiriman 🚚",
+    DONE:             "Pesanan selesai. Terima kasih! 💚",
+  };
+
+  const itemLines = items.length > 0
+    ? items.map(i => `• ${i.product_name} x${i.qty} ${i.unit}`).join("\n")
+    : "_Detail item tidak tersedia_";
+
+  return (
+    `📦 *Order \`${displayId}\`*\n` +
+    `Status: ${statusLabels[status] ?? status}\n\n` +
+    `${itemLines}\n\n` +
+    `*Total: Rp${total.toLocaleString("id-ID")}*`
+  );
+}
