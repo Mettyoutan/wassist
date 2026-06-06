@@ -29,7 +29,8 @@ export async function createOrder(
   tenantId: string,
   customerId: string,
   items: PendingOrderItem[],
-  total: number
+  total: number,
+  notes?: string
 ): Promise<{ orderId: string }> {
   const { data: order, error: orderErr } = await supabaseAdmin
     .from("orders")
@@ -39,6 +40,7 @@ export async function createOrder(
       total_amount:     total,
       status:           "PENDING",
       payment_status:   "UNPAID",
+      notes:            notes ?? null,
     })
     .select("id")
     .single();

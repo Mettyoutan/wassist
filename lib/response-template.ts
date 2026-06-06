@@ -191,3 +191,31 @@ export function orderStatusMessage(
     `*Total: Rp${total.toLocaleString("id-ID")}*`
   );
 }
+
+export function addressRequestMessage(): string {
+  return (
+    `📦 Hampir selesai kak!\n\n` +
+    `Mau dikirim ke alamat mana? Ketik alamat lengkap ya 😊\n` +
+    `_Contoh: Jl. Merdeka No. 12, Kel. Sukamaju, Depok 16451_`
+  );
+}
+
+export function ownerNewOrderMessage(
+  senderPhone: string,
+  total:       number,
+  itemSummary: string,
+  midtransId:  string,
+  address?:    string
+): string {
+  const addressLine = address
+    ? `Alamat: ${address}\n`
+    : `Alamat: _belum diisi_\n`;
+  return (
+    `🛒 *Order baru!*\n` +
+    `Dari: ${senderPhone}\n` +
+    `Total: *Rp${total.toLocaleString("id-ID")}*\n` +
+    `Item: ${itemSummary}\n` +
+    addressLine +
+    `Order ID: ${midtransId}`
+  );
+}

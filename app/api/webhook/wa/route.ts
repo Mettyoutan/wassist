@@ -4,6 +4,7 @@ import { getTenantByWaPhoneId,
          getActiveProducts,
          updateOrderStatus }             from "@/server/db";
 import { getSession,
+         setSession,
          clearSession,
          cleanupExpiredSessions }        from "@/lib/session";
 import { parseCustomerMessage }          from "@/lib/ai/customer-parser";
@@ -13,7 +14,8 @@ import { greetingMessage,
          cancelOrderMessage,
          confirmationPendingMessage,
          modifyOrderInConfirmationMessage,
-         modifyOrderHandoffMessage }    from "@/lib/response-template";
+         modifyOrderHandoffMessage,
+         addressRequestMessage }        from "@/lib/response-template";
 import { handleBrowseIntent }            from "@/lib/handlers/browse";
 import { handleStatusIntent }            from "@/lib/handlers/status";
 import { handleHandoffIntent }           from "@/lib/handlers/handoff";
@@ -98,12 +100,12 @@ export async function POST(request: NextRequest) {
       const signal = await parseConfirmationIntent(msgText);
 
       if (signal === "confirm") {
-        try {
-          await processOrderConfirmation(tenant, senderPhone, session);
-        } catch (err) {
-          console.error("[Webhook] processOrderConfirmation failed:", err);
-          await sendWhatsAppMessage(senderPhone, "Terjadi kesalahan saat memproses pesanan kak 🙏 Coba lagi ya.");
-        }
+        setSession(tenant.id, senderPhone, {
+          ...session,
+          state:        "awaiting_address",
+          last_updated: Date.now(),
+        });
+        await sendWhatsAppMessage(senderPhone, addressRequestMessage());
         return NextResponse.json({ status: "ok" });
       }
 
@@ -134,6 +136,22 @@ export async function POST(request: NextRequest) {
         await sendWhatsAppMessage(senderPhone, modifyOrderInConfirmationMessage());
       } else {
         await sendWhatsAppMessage(senderPhone, confirmationPendingMessage());
+      }
+      return NextResponse.json({ status: "ok" });
+    }
+
+    if (session.state === "awaiting_address") {
+      const address = msgText.trim();
+      if (!address) {
+        await sendWhatsAppMessage(senderPhone, addressRequestMessage());
+        return NextResponse.json({ status: "ok" });
+      }
+      try {
+        await processOrderConfirmation(tenant, senderPhone, session, address);
+      } catch (err) {
+        console.error("[Webhook] processOrderConfirmation (awaiting_address) failed:", err);
+        clearSession(tenant.id, senderPhone);
+        await sendWhatsAppMessage(senderPhone, "Terjadi kesalahan saat memproses pesanan kak 🙏 Coba lagi ya.");
       }
       return NextResponse.json({ status: "ok" });
     }
