@@ -7,6 +7,7 @@ import {
   variantClarificationMessage,
   quantityClarificationMessage,
   clarificationOutOfStockMessage,
+  orderCancelledMessage,
 }                                                  from "@/lib/response-template";
 import type { DbTenant }                           from "@/lib/types/db";
 import type { Session, PendingOrderItem }          from "@/lib/types/session";
@@ -36,7 +37,7 @@ export async function handleClarificationAnswer(
 
   if (isCancelled) {
     clearSession(tenant.id, senderPhone);
-    await sendWhatsAppMessage(senderPhone, "Pesanan dibatalkan ya kak 👍 Ketik *menu* untuk lihat katalog.");
+    await sendWhatsAppMessage(senderPhone, orderCancelledMessage());
     return;
   }
 

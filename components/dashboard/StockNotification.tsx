@@ -101,7 +101,7 @@ export default function StockNotification({ items }: StockNotificationProps) {
                 alignItems: "center",
                 justifyContent: "center",
               }}
-              onClick={}
+              onClick={() => {}}
             >
               <div style={{ fontSize: "28px", lineHeight: "1" }}>+</div>
               <div style={{ fontSize: "11px", marginTop: "4px" }}>

@@ -3,9 +3,6 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createProduct } from '@/server/db'
-import { text } from 'stream/consumers'
-import { PATCH } from '@/app/api/orders/[id]/route'
 
 const CATEGORIES = ['Makanan', 'Minuman', 'Snack', 'Paket', 'Lainnya']
 
@@ -40,21 +37,25 @@ export default function CreateProduct() {
     return errs
   }
 
-  const handleSubmit = async (e: React.SubmitEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const errs = validate()
     if (Object.keys(errs).length) { setErrors(errs); return }
 
     setLoading(true)
     try {
-        await fetch( "/api/products", {
-        name: String(form.name),
-        description: String(form.description),
-        price: Number(form.price),
-        stock: Number(form.stock) || 0,
-        category: String(form.category)
+      await fetch("/api/products", {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name:        form.name.trim(),
+          description: form.description.trim() || null,
+          price:       Number(form.price),
+          stock:       Number(form.stock) || 0,
+          category:    form.category || null,
+        }),
       })
-      router.push('/products')
+      router.push('/dashboard/products')
       router.refresh()
     } catch {
       setLoading(false)

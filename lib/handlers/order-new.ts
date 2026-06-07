@@ -155,6 +155,26 @@ export async function handleOrderIntent(
             resolved:     resolvedItems.slice(),
             retry_count:  0,
           };
+        } else {
+          // Sudah ada clarification aktif — gunakan candidate pertama (best-guess LLM)
+          const best = result.candidates[0];
+          if (best) {
+            const qty = result.qty ?? 1;
+            if (best.stock >= qty) {
+              resolvedItems.push({
+                product_id: best.product_id,
+                name:       best.name,
+                qty,
+                unit:       best.unit,
+                size:       result.size,
+                notes:      result.notes,
+                price:      best.price,
+                subtotal:   best.price * qty,
+              });
+            } else {
+              notFoundNames.push(best.name);
+            }
+          }
         }
         break;
 
@@ -187,7 +207,11 @@ export async function handleOrderIntent(
         break;
 
       case "out_of_stock":
-        if (clarification === null) {
+        if (result.candidate.stock === 0) {
+          // Stok habis total — tidak ada gunanya tanya qty
+          notFoundNames.push(result.candidate.name);
+        } else if (clarification === null) {
+          // Stok ada tapi kurang dari qty diminta — tanya mau berapa
           clarification = {
             kind:         "quantity",
             candidates:   [result.candidate],
@@ -198,6 +222,8 @@ export async function handleOrderIntent(
             resolved:     resolvedItems.slice(),
             retry_count:  0,
           };
+        } else {
+          notFoundNames.push(result.candidate.name);
         }
         break;
     }

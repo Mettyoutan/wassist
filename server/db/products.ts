@@ -176,6 +176,22 @@ export async function createProduct(
   return data;
 }
 
+export async function getProductById(
+  productId: string
+): Promise<Pick<DbProduct, "id" | "name" | "description" | "price" | "stock" | "unit" | "category" | "reorder_point" | "image_url" | "is_active"> | null> {
+  const { data, error } = await supabaseAdmin
+    .from("products")
+    .select("id, name, description, price, stock, unit, category, reorder_point, image_url, is_active")
+    .eq("id", productId)
+    .single();
+
+  if (error) {
+    if (error.code !== "PGRST116") console.error("[DB] getProductById:", error.message);
+    return null;
+  }
+  return data as Pick<DbProduct, "id" | "name" | "description" | "price" | "stock" | "unit" | "category" | "reorder_point" | "image_url" | "is_active">;
+}
+
 export async function updateProduct(
   productId: string,
   updates: {
