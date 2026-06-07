@@ -7,7 +7,7 @@
 ## Status Umum
 - **Deadline submit:** 11 Juni 2026
 - **Target selesai:** 8 Juni 2026
-- **Last updated:** 6 Juni 2026
+- **Last updated:** 7 Juni 2026
 - **Build status:** ✅ 0 TypeScript error (`npm run build` clean)
 - **Deploy status:** ❌ Belum di-deploy ke Cloud Run (BLOCKER)
 
@@ -29,10 +29,21 @@
 - [x] `lib/handlers/status.ts` — tampil midtrans_id + CONFIRMED/AWAITING_PAYMENT messages ✅ 2026-06-06
 - [x] `modify_order` intent — contextual messages (dalam confirmation vs idle) ✅ 2026-06-06
 - [x] Owner `mark_fulfilled` + `mark_done` via WA — notif customer otomatis ✅ 2026-06-06
+- [x] Shipping address: `awaiting_address` state, address tersimpan di `orders.notes` ✅ 2026-06-07
+- [x] Saved address: `users.last_address` + confirm/new flow untuk returning customer ✅ 2026-06-07
+- [x] Fix: `confirmationParser` ambiguous untuk pesan dengan nama produk ✅ 2026-06-07
+- [x] Owner `mark_paid` via WA — manual payment confirmation + stock decrement ✅ 2026-06-07
+- [x] Low-stock WA alert setelah PAID callback (Midtrans webhook) ✅ 2026-06-07
+- [x] QR resend: customer `awaiting_payment` + keyword check → kirim ulang QR ✅ 2026-06-07
+- [x] Session expiry UX: `peekExpiredSession` + friendly message untuk customer ✅ 2026-06-07
+- [x] Concurrent order guard: blokir `order_new` jika AWAITING_PAYMENT order ada ✅ 2026-06-07
+- [x] `deleteOrder` cascade: hapus `order_items` dulu → fix FK violation ✅ 2026-06-07
+- [x] `orderCancelledMessage()` template: extract 2 hardcoded cancel strings ✅ 2026-06-07
 
 ### AI / LLM
-- [x] `lib/ai/models.ts` — 3 model Gemini (customerParser 0.1, ownerParser 0.1, generator 0.4)
+- [x] `lib/ai/models.ts` — 5 model Gemini (customerParser, ownerParser, generator, confirmationParser, clarificationParser) ✅ 2026-06-06
 - [x] `lib/ai/customer-parser.ts` — parseCustomerMessage + buildCustomerIntentPrompt
+- [x] `lib/ai/confirmation-parser.ts` — parseConfirmationIntent + parseClarificationInput ✅ 2026-06-06
 - [x] `lib/owner/parser.ts` — parseOwnerCommand (11 actions, confidence threshold)
 - [x] `lib/owner/generator.ts` — generateRevenueResponse (fetch-then-inject pattern)
 
@@ -61,6 +72,10 @@
 - [x] `server/db/tenants.ts` — + `getTenantById()` ✅ 2026-06-05
 - [x] `server/db/products.ts` — + `getProductsByTenantAll()` ✅ 2026-06-05
 - [x] `server/db/orders.ts` — + `getLastCompletedOrderWithItems()` + `LastOrderItem` type ✅ 2026-06-05
+- [x] `server/db/orders.ts` — + `deleteOrder()`, `getLatestActiveOrderWithItems()`, `getLatestOrderByStatus()`, `getOrderById()` ✅ 2026-06-06
+- [x] `server/db/products.ts` — + `getProductsStockStatus()` + `ProductStockStatus` type ✅ 2026-06-07
+- [x] `lib/session.ts` — + `peekExpiredSession()` ✅ 2026-06-07
+- [x] `lib/midtrans.ts` — + `getMidtransQrString()` ✅ 2026-06-07
 
 ---
 
@@ -155,6 +170,11 @@
 - [x] Fix Bug 9: architecture violations (inline supabaseAdmin) ✅ 2026-06-05
 - [x] cancel_order intent → template informatif (bukan generic handoff) ✅ 2026-06-05
 - [x] repeat_last intent → re-order pesanan terakhir ✅ 2026-06-05
+- [x] Keyword matching → AI: CONFIRM/CANCEL_KEYWORDS + extractNumber dihapus → parseConfirmationIntent + parseClarificationInput ✅ 2026-06-06
+- [x] handleStatusIntent → tampil items + total + skip CANCELLED ✅ 2026-06-06
+- [x] confirm-order orphan order rollback via deleteOrder() ✅ 2026-06-06
+- [x] Memory leak: cleanupExpiredSessions dipanggil tiap 50 request ✅ 2026-06-06
+- [x] Dashboard orders page → error state + retry button ✅ 2026-06-06
 
 ### MEDIUM — polish
 - [x] Fix Bug 4: Browse fallback tampilkan unit ✅ 2026-06-04
@@ -186,6 +206,48 @@
 ---
 
 ## 📝 Catatan Sesi
+
+### 2026-06-07 (sesi 2) — Plan 1 + Plan 2 (saved address)
+- Fix: `confirmationParserModel` systemInstruction — pesan dengan nama produk/kata "tambah" → return `ambiguous` (bukan `confirm`) ✅ commit c3d2e08
+- Migration: `ALTER TABLE users ADD COLUMN last_address TEXT` (manual Supabase)
+- New: `getUserWithAddress(tenantId, phone)` + `updateUserLastAddress(userId, address)` → `server/db/users.ts` ✅ commit ca15a32
+- New: `pending_saved_address?: string` field di `Session` type ✅ commit ca15a32
+- New: `addressConfirmMessage(savedAddress)` template (include opsi *batal*) ✅ commit 933b015
+- Feat: `awaiting_confirmation` confirm branch → cek `last_address`; jika ada → `addressConfirmMessage`; jika tidak → `addressRequestMessage`
+- Feat: `awaiting_address` handler — returning customer: parse confirm/cancel/new text; first-time: plain text
+- Feat: address persist fire-and-forget via `.catch()`, skip write jika tidak berubah
+- Fix: `pending_saved_address` cleared saat transisi ke `awaiting_payment` di `confirm-order.ts`
+- Build ✅ 0 TypeScript error
+
+### 2026-06-07 (sesi 1) — Plan A + Plan B
+- Plan A: Shipping address slot-filling — `awaiting_address` state inserted between `awaiting_confirmation` dan `awaiting_payment`
+- Plan A: Address disimpan di `orders.notes` (existing nullable column — tanpa migration)
+- Plan A: Owner notif include address line via `ownerNewOrderMessage()`
+- Plan A: `addressRequestMessage()` template baru
+- Plan B1: `mark_paid` owner command (14 actions total) — AWAITING_PAYMENT→PAID + stock decrement + notif customer
+- Plan B2: Low-stock WA alert setelah Midtrans PAID callback — cek `reorder_point` per produk
+- Plan B3: QR resend — customer `awaiting_payment` + keyword "qr/bayar/scan" → kirim ulang QR via `getMidtransQrString`
+- Plan B4: Session expiry UX — `peekExpiredSession()` deteksi expired sebelum `getSession` reset
+- Plan B5: Concurrent order guard — `case "order_new"` cek AWAITING_PAYMENT via `getLatestActiveOrderWithItems`
+- Fix: `deleteOrder` cascade items dulu (FK safety)
+- Fix: `orderCancelledMessage()` replace 2 hardcoded cancel strings di route.ts
+- Fix: `case "order_new"` wrapped in braces (block scope untuk `const`)
+- Build ✅ 0 TypeScript error
+
+### 2026-06-06 (sesi 3)
+- Feat: Semua keyword matching → AI: `CONFIRM_KEYWORDS`/`CANCEL_KEYWORDS`/`extractNumber` dihapus → `parseConfirmationIntent` + `parseClarificationInput` via Gemini
+- New: `lib/ai/confirmation-parser.ts` — `parseConfirmationIntent`, `parseClarificationInput`
+- New: `confirmationParserModel` + `clarificationParserModel` di `lib/ai/models.ts` (total 5 model)
+- Fix: `lib/handlers/confirm-order.ts` — orphan order rollback: `deleteOrder()` saat `updateOrderMidtrans` gagal
+- Fix: `lib/handlers/confirm-order.ts` — session ordering: `setSession(awaiting_payment)` sebelum notif owner
+- Fix: `lib/handlers/confirm-order.ts` — owner notif fire-and-forget `.catch()` (tidak abort flow)
+- New: `deleteOrder()` di `server/db/orders.ts`
+- New: `getLatestActiveOrderWithItems()` + `ActiveOrderWithItems` type di `server/db/orders.ts` — skip CANCELLED + join items
+- New: `orderStatusMessage()` di `lib/response-template.ts` — tampil items + total + status label
+- Feat: `handleStatusIntent` rewrite — skip CANCELLED, tampil items + total via `getLatestActiveOrderWithItems`
+- Fix: Memory leak — `cleanupExpiredSessions()` dipanggil setiap 50 request via counter `_reqCount`
+- Fix: Dashboard `/orders` — error state + retry button (`setError`, `useCallback` fetchOrders)
+- Build ✅ 0 TypeScript error, 17 routes
 
 ### 2026-06-06 (sesi 2)
 - Fix: `lib/handlers/status.ts` → tampil `midtrans_id` (format WA-xxx) bukan UUID slice; tambah CONFIRMED + AWAITING_PAYMENT ke statusMessages

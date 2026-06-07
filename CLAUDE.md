@@ -1,5 +1,5 @@
 # CLAUDE.md — WAssist Project Context
-> Last updated: 5 Juni 2026
+> Last updated: 7 Juni 2026
 
 ---
 
@@ -102,20 +102,23 @@ wassist/
 │       │                                getProductByRetailerId, updateProductPrice,
 │       │                                updateProductStock, setProductReorderPoint,
 │       │                                setProductActive, decrementProductStock,
-│       │                                getProductsByTenantAll
+│       │                                getProductsByTenantAll, getProductsStockStatus
 │       ├── orders.ts                 ← createOrder, updateOrderMidtrans, updateOrderStatus,
 │       │                                getOrderByMidtransId, getLatestOrderByCustomer,
-│       │                                getOrderItemsByOrderId, getLastCompletedOrderWithItems
-│       ├── users.ts                  ← upsertCustomer, getUserIdByPhone, getUserById
+│       │                                getOrderItemsByOrderId, getLastCompletedOrderWithItems,
+│       │                                deleteOrder, getLatestActiveOrderWithItems,
+│       │                                getLatestOrderByStatus, getOrderById
+│       ├── users.ts                  ← upsertCustomer, getUserIdByPhone, getUserById,
+│       │                                getUserWithAddress, updateUserLastAddress
 │       ├── tenants.ts                ← getTenantByWaPhoneId, setStoreStatus, getTenantById
 │       ├── analytics.ts              ← queryRevenueData, RevenueData type, parsePeriod
 │       └── index.ts                  ← re-export semua → import dari @/server/db
 ├── lib/                              # Pure utilities — NO DB queries di sini
 │   ├── ai/
-│   │   ├── models.ts                 ← parserModel, ownerParserModel, generatorModel
-│   │   └── customer-parser.ts        ← parseCustomerMessage, buildCustomerIntentPrompt
-│   ├── constants/
-│   │   └── confirmation-keywords.ts  ← CONFIRM_KEYWORDS, CANCEL_KEYWORDS (Set)
+│   │   ├── models.ts                 ← customerParserModel, ownerParserModel, generatorModel,
+│   │   │                                confirmationParserModel, clarificationParserModel
+│   │   ├── customer-parser.ts        ← parseCustomerMessage, buildCustomerIntentPrompt
+│   │   └── confirmation-parser.ts    ← parseConfirmationIntent, parseClarificationInput
 │   ├── handlers/
 │   │   ├── browse.ts                 ← handleBrowseIntent()
 │   │   ├── cart-order.ts             ← handleCartOrder() dari WA Catalog
@@ -137,10 +140,12 @@ wassist/
 │   │   ├── whatsapp.ts               ← WA webhook types
 │   │   ├── tenant.ts
 │   │   └── index.ts                  ← barrel re-export
-│   ├── session.ts                    ← in-memory session store (Map, TTL 30 menit)
+│   ├── session.ts                    ← in-memory session store (Map, TTL 30 menit),
+│   │                                    peekExpiredSession
 │   ├── whatsapp.ts                   ← sendWhatsAppMessage, sendCatalogMessage,
 │   │                                    uploadWhatsAppMedia, sendWhatsAppImageMessage
-│   ├── midtrans.ts                   ← createQrisPayment, verifyMidtransSignature
+│   ├── midtrans.ts                   ← createQrisPayment, verifyMidtransSignature,
+│   │                                    getMidtransQrString
 │   ├── response-template.ts          ← orderConfirmationMessage, dll
 │   └── utils.ts
 ├── scripts/
@@ -183,8 +188,9 @@ CREATE TABLE users (
   phone       TEXT NOT NULL,                        -- format: 628xxx
   name        TEXT NOT NULL,
   role        TEXT NOT NULL CHECK (role IN ('OWNER','CUSTOMER')),
-  last_seen   TIMESTAMPTZ DEFAULT now(),
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_seen    TIMESTAMPTZ DEFAULT now(),
+  last_address TEXT,                                -- alamat pengiriman terakhir, nullable
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (tenant_id, phone)                         -- constraint: users_tenant_id_phone_key ✅ verified
 );
 ```
@@ -296,15 +302,16 @@ export type DbOrder = Omit<Tables<"orders">, "status" | "payment_status"> & {
 
 ---
 
-## AI/LLM Architecture — 3 Model Gemini
+## AI/LLM Architecture — 5 Model Gemini
 
-### Tiga Model, Tiga Tujuan (semua di `lib/ai/models.ts`)
+### Lima Model, Lima Tujuan (semua di `lib/ai/models.ts`)
 
-| | `customerParserModel` | `ownerParserModel` | `generatorModel` |
-|---|---|---|---|
-| Dipakai | Parse pesan customer | Parse perintah owner | Narasi analytics owner |
-| Output | `ParsedIntent` (JSON schema) | `OwnerCommand` (JSON schema) | Free-form teks |
-| Temperature | 0.1 | 0.1 | 0.4 |
+| | `customerParserModel` | `ownerParserModel` | `generatorModel` | `confirmationParserModel` | `clarificationParserModel` |
+|---|---|---|---|---|---|
+| Dipakai | Parse pesan customer | Parse perintah owner | Narasi analytics owner | Deteksi confirm/cancel | Parse jawaban clarification |
+| Output | `ParsedIntent` (JSON schema) | `OwnerCommand` (JSON schema) | Free-form teks | `signal` enum | `choice` + `cancel` |
+| Temperature | 0.1 | 0.1 | 0.4 | 0.1 | 0.1 |
+| File | `lib/ai/customer-parser.ts` | `lib/owner/parser.ts` | `lib/owner/generator.ts` | `lib/ai/confirmation-parser.ts` | `lib/ai/confirmation-parser.ts` |
 
 > ⚠️ Verifikasi nama model di https://aistudio.google.com SEBELUM coding. String `gemini-3.1-flash-lite` valid per Mei 2026.
 
@@ -325,7 +332,7 @@ low_confidence  → tidak jelas / di luar konteks → handoff ke owner
 > 2. `lib/ai/customer-parser.ts` — `ParsedIntentSchema` Zod enum
 > 3. `app/api/webhook/wa/route.ts` — `case` baru di switch
 
-### Owner Command — 11 Action (`lib/owner/parser.ts`)
+### Owner Command — 14 Action (`lib/owner/parser.ts`)
 ```
 get_revenue        → omzet / laporan → queryRevenueData + Gemini narasi
 get_stock          → cek stok
@@ -336,6 +343,9 @@ deactivate_product ← BUTUH KONFIRMASI
 activate_product   ← BUTUH KONFIRMASI
 open_store         → langsung, tanpa konfirmasi
 close_store        → langsung, tanpa konfirmasi
+mark_fulfilled     → order PAID → FULFILLED, notif customer 🚚
+mark_done          → order FULFILLED → DONE, notif customer ✅
+mark_paid          → konfirmasi bayar manual (AWAITING_PAYMENT → PAID), notif customer 💰
 help               → daftar perintah
 unknown            → fallback
 ```
@@ -367,6 +377,7 @@ qty: { type: SchemaType.NUMBER }  // bukan SchemaType.INTEGER
 export type SessionState =
   | "idle"
   | "awaiting_confirmation"         // customer konfirmasi order
+  | "awaiting_address"              // bot sudah tanya alamat, nunggu customer balas
   | "awaiting_payment"              // customer sedang bayar QRIS
   | "awaiting_clarification"        // bot nunggu jawaban klarifikasi (varian/qty)
   | "awaiting_owner_confirmation";  // owner konfirmasi mutasi
@@ -395,32 +406,41 @@ export type PendingClarification = {
 };
 
 export type Session = {
-  state:                  SessionState;
-  pending_order?:         PendingOrder;
-  current_order_id?:      string;
-  pending_owner_action?:  PendingOwnerAction;
-  pending_clarification?: PendingClarification; // hanya saat awaiting_clarification
-  retry_count:            number;
-  last_updated:           number;  // Date.now() — TTL 30 menit
+  state:                   SessionState;
+  pending_order?:          PendingOrder;
+  current_order_id?:       string;
+  pending_saved_address?:  string;               // alamat tersimpan — set saat awaiting_address
+  pending_owner_action?:   PendingOwnerAction;
+  pending_clarification?:  PendingClarification; // hanya saat awaiting_clarification
+  retry_count:             number;
+  last_updated:            number;  // Date.now() — TTL 30 menit
 };
 ```
 
 ### Urutan Check di Webhook (JANGAN DIUBAH)
 ```
 1. State machine check DULU — sebelum Gemini
-   awaiting_confirmation  → cek CONFIRM/CANCEL keywords → processOrderConfirmation
-   awaiting_clarification → cek CANCEL → handleClarificationAnswer
-   awaiting_payment       → resend payment reminder
+   awaiting_confirmation  → parseConfirmationIntent() → confirm → awaiting_address; cancel/ambiguous
+   awaiting_address       → terima teks alamat → processOrderConfirmation(address)
+   awaiting_clarification → handleClarificationAnswer() (parseClarificationInput di dalam)
+   awaiting_payment       → QR resend keywords check; cancel → CANCELLED; else reminder
 2. Owner vs Customer check (tenant.owner_phone === senderPhone)
-3. Owner → handleOwnerCommand() (punya state machine sendiri)
+3. Owner → handleOwnerCommand() (punya state machine sendiri, parseConfirmationIntent untuk confirm)
 4. Customer → parseCustomerMessage() → intent router
 ```
 
-### CONFIRM_KEYWORDS / CANCEL_KEYWORDS — Gunakan `.has()` dengan normalize
+### parseConfirmationIntent — Ganti CONFIRM_KEYWORDS/CANCEL_KEYWORDS
 ```typescript
-// Normalize dulu: text.toLowerCase().trim()
-CONFIRM_KEYWORDS.has(normalized)  // "ya", "iya", "ok", "gas", "gaskeun", dll
-CANCEL_KEYWORDS.has(normalized)   // "batal", "tidak", "gak", "cancel", dll
+// lib/ai/confirmation-parser.ts
+// JANGAN pakai Set keyword matching — sudah DIHAPUS
+const signal = await parseConfirmationIntent(msgText);
+// signal: "confirm" | "cancel" | "ambiguous"
+// Handle bahasa informal, typo, slang Indonesia via Gemini
+
+// Untuk clarification (varian/qty):
+const { choice, cancel } = await parseClarificationInput(
+  msgText, kind, candidateCount, integerOnly, maxStock
+);
 ```
 
 ---
@@ -513,6 +533,13 @@ const product = await getProductByRetailerId(tenant.id, cartItem.product_retaile
 | All API routes (kpi, orders, products) | ✅ | `app/api/dashboard/`, `app/api/orders/` |
 | cancel_order | ✅ | `lib/response-template.ts` → `cancelOrderMessage()` |
 | repeat_last | ✅ | `lib/handlers/repeat-last.ts` → `handleRepeatLastIntent()` |
+| Shipping address slot-filling | ✅ | `awaiting_address` state, `orders.notes` |
+| Saved address (returning customer) | ✅ | `users.last_address`, `getUserWithAddress`, `addressConfirmMessage` |
+| mark_paid owner command | ✅ | `lib/handlers/owner.ts` + stock decrement |
+| Low-stock WA alert after PAID | ✅ | `app/api/webhook/midtrans/route.ts` |
+| QR resend (awaiting_payment) | ✅ | `app/api/webhook/wa/route.ts` + `getMidtransQrString` |
+| Session expiry UX message | ✅ | `lib/session.ts` → `peekExpiredSession` |
+| Concurrent order guard | ✅ | `case "order_new"` guard in `app/api/webhook/wa/route.ts` |
 | modify_order | ❌ post-MVP → handoff | — |
 
 ---
@@ -551,12 +578,20 @@ const product = await getProductByRetailerId(tenant.id, cartItem.product_retaile
 
 ---
 
-## Remaining Items (per 5 Juni 2026)
+## Remaining Items (per 7 Juni 2026)
 
 ### Critical — demo blocker
 - [ ] Cloud Run deploy + update Meta Developer Console webhook URL
 - [ ] End-to-end test bot dari WA real device setelah deploy
 - [ ] Jalankan `scripts/delete-demo.sql` + `scripts/seed-demo.sql` di Supabase sebelum demo
+
+### Fitur Baru (per 7 Juni 2026 sesi 2) ✅
+- ✅ `confirmationParser` fix: pesan dengan nama produk/kata "tambah" → selalu `ambiguous` (bukan `confirm`)
+- ✅ Saved address: `users.last_address` column + `getUserWithAddress` + `updateUserLastAddress`
+- ✅ Session field `pending_saved_address?: string` → clear saat transisi ke `awaiting_payment`
+- ✅ `addressConfirmMessage(savedAddress)` template (include opsi *batal*)
+- ✅ `awaiting_address` handler: returning customer → konfirmasi saved address; first-time → minta baru
+- ✅ Address persisted fire-and-forget; skip write jika tidak berubah
 
 ### Bug & Architecture — SELESAI ✅
 - ✅ Architecture violations: inline `supabaseAdmin` di routes/handlers → extract ke `server/db/`
@@ -572,12 +607,26 @@ const product = await getProductByRetailerId(tenant.id, cartItem.product_retaile
 - ✅ `uploadWhatsAppMedia` pakai Web API FormData → ganti npm `form-data` package
 - ✅ `paymentLinkMessage` leading whitespace + empty URL → fix template literal + guard URL kosong
 - ✅ `awaiting_confirmation` fallback message → `confirmationPendingMessage()` template
+- ✅ Keyword matching (CONFIRM/CANCEL_KEYWORDS, extractNumber) → replaced dengan AI (`parseConfirmationIntent`, `parseClarificationInput`)
+- ✅ Memory leak: `cleanupExpiredSessions()` tidak pernah dipanggil → counter-based cleanup setiap 50 request
+- ✅ Orphan order rollback: `deleteOrder()` saat `updateOrderMidtrans` gagal setelah `createOrder`
+- ✅ Session ordering: `setSession(awaiting_payment)` dipindah sebelum notif owner (fire-and-forget)
+- ✅ `handleStatusIntent`: tampil items + total, skip CANCELLED
+- ✅ Shipping address slot-filling: `awaiting_address` state, store di `orders.notes`
+- ✅ `mark_paid` owner command: manual payment confirmation + stock decrement
+- ✅ Low-stock WA alert setelah Midtrans PAID callback
+- ✅ QR resend: customer `awaiting_payment` bisa minta kirim ulang QR
+- ✅ Session expiry UX: `peekExpiredSession` + `sessionExpiredMessage`
+- ✅ Concurrent order guard: blokir `order_new` jika ada AWAITING_PAYMENT
+- ✅ `deleteOrder` cascade items dulu (fix FK violation)
+- ✅ Extract hardcoded cancel strings ke `orderCancelledMessage()` template
 
 ### Dashboard UI — SELESAI ✅
 - ✅ Bottom navigation bar + dynamic navbar title
 - ✅ `design.md` + `globals.css` fix
 - ✅ `StatusBadge` color fix, `KPICard` bg fix
 - ✅ Stub pages: `/dashboard/settings`, `/dashboard/account`
+- ✅ `/dashboard/orders` error state + retry button
 
 ### Nice-to-have
 - [ ] Toast notifications untuk aksi (finish order)
@@ -716,6 +765,9 @@ Wajib tambah **handler file** di `lib/handlers/` (satu file per intent besar).
 ❌ owner_phone dengan `+` prefix di DB → format wajib `628xxx` tanpa `+` (verified: 6287715781238 ✅)
 ❌ owner_phone diisi nomor WA Business → harus nomor personal owner (beda dari META_PHONE_NUMBER_ID)
 ❌ Meta test mode: kirim WA ke nomor yang belum pernah chat bot → harus tambah sebagai test recipient di Meta Developer Console (WhatsApp → API Setup → "To" field) ATAU nomor harus kirim pesan ke bot dulu dalam 24 jam
+❌ CONFIRM_KEYWORDS / CANCEL_KEYWORDS Set → DIHAPUS, pakai parseConfirmationIntent() dari lib/ai/confirmation-parser.ts
+❌ extractNumber regex untuk clarification → DIHAPUS, pakai parseClarificationInput() dari lib/ai/confirmation-parser.ts
+❌ lib/constants/confirmation-keywords.ts → FILE SUDAH DIHAPUS, jangan import lagi
 ```
 
 ---
