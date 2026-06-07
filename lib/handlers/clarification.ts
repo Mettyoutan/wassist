@@ -55,12 +55,15 @@ export async function handleClarificationAnswer(
 
     // Multi-select atau single dengan qty langsung → resolve sekaligus
     if (validChoices.length > 1 || (validChoices.length === 1 && validChoices[0].qty !== undefined)) {
-      const newItems: PendingOrderItem[] = [];
+      const newItems:     PendingOrderItem[] = [];
+      const droppedNames: string[]           = [];
+
       for (const c of validChoices) {
         const chosen = candidates[c.index - 1];
         const qty    = c.qty ?? knownQty ?? 1;
 
         if (chosen.stock < qty) {
+          droppedNames.push(chosen.name);
           continue;
         }
 
@@ -85,7 +88,7 @@ export async function handleClarificationAnswer(
         return;
       }
 
-      await finalizeOrder(tenant, senderPhone, resolved, newItems);
+      await finalizeOrder(tenant, senderPhone, resolved, newItems, droppedNames);
       return;
     }
 
@@ -150,7 +153,7 @@ export async function handleClarificationAnswer(
 
   // kind === "quantity"
   const prod = candidates[0];
-  const num  = choices[0]?.qty ?? choices[0]?.index ?? 0;
+  const num  = choices[0]?.qty ?? 0;
 
   if (num > 0) {
     if (integer_only && !Number.isInteger(num)) {
@@ -195,10 +198,11 @@ export async function handleClarificationAnswer(
 }
 
 async function finalizeOrder(
-  tenant:      DbTenant,
-  senderPhone: string,
-  resolved:    PendingOrderItem[],
-  newItems:    PendingOrderItem[],
+  tenant:       DbTenant,
+  senderPhone:  string,
+  resolved:     PendingOrderItem[],
+  newItems:     PendingOrderItem[],
+  droppedNames: string[] = [],
 ): Promise<void> {
   const allItems = [...resolved, ...newItems];
   const total    = allItems.reduce((sum, i) => sum + i.subtotal, 0);
@@ -210,7 +214,7 @@ async function finalizeOrder(
     last_updated:  Date.now(),
   });
 
-  await sendWhatsAppMessage(senderPhone, orderConfirmationMessage(allItems, total));
+  await sendWhatsAppMessage(senderPhone, orderConfirmationMessage(allItems, total, droppedNames.length > 0 ? droppedNames : undefined));
 }
 
 async function handleRetry(
