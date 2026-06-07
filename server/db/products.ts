@@ -140,3 +140,86 @@ export async function getProductsByTenantAll(
   if (error) console.error("[DB] getProductsByTenantAll:", error.message);
   return (data ?? []) as Pick<DbProduct, "id" | "name" | "price" | "unit" | "stock" | "reorder_point" | "is_active">[];
 }
+
+export async function createProduct(
+  tenantId: string,
+  name: string,
+  price: number,
+  stock: number,
+  unit: string,
+  reorderPoint: number,
+  imageUrl?: string,
+  category?: string,
+  description?: string
+): Promise<{ id: string } | null> {
+  const { data, error } = await supabaseAdmin
+    .from("products")
+    .insert({
+      tenant_id: tenantId,
+      name,
+      price,
+      stock,
+      unit,
+      reorder_point: reorderPoint,
+      image_url: imageUrl || null,
+      category: category || null,
+      description: description || null,
+      is_active: true
+    })
+    .select("id")
+    .single();
+
+  if (error) {
+    console.error("[DB] createProduct error:", error.message);
+    return null;
+  }
+  return data;
+}
+
+export async function updateProduct(
+  productId: string,
+  updates: {
+    name?: string;
+    price?: number;
+    stock?: number;
+    unit?: string;
+    reorder_point?: number;
+    image_url?: string;
+    category?: string;
+    description?: string;
+  }
+): Promise<void> {
+  const { error } = await supabaseAdmin
+    .from("products")
+    .update({
+      ...updates,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", productId);
+
+  if (error) throw new Error(`[DB] updateProduct: ${error.message}`);
+}
+
+export type ProductStockStatus = {
+  id:            string;
+  name:          string;
+  stock:         number;
+  unit:          string;
+  reorder_point: number;
+};
+
+export async function getProductsStockStatus(
+  productIds: string[]
+): Promise<ProductStockStatus[]> {
+  if (productIds.length === 0) return [];
+  const { data, error } = await supabaseAdmin
+    .from("products")
+    .select("id, name, stock, unit, reorder_point")
+    .in("id", productIds);
+
+  if (error) {
+    console.error("[DB] getProductsStockStatus:", error.message);
+    return [];
+  }
+  return (data ?? []) as ProductStockStatus[];
+}

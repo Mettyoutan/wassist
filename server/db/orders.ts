@@ -90,6 +90,7 @@ export async function updateOrderMidtrans(
 
 // Hard-delete order — rollback saat updateOrderMidtrans gagal setelah createOrder.
 export async function deleteOrder(orderId: string): Promise<void> {
+  await supabaseAdmin.from("order_items").delete().eq("order_id", orderId);
   const { error } = await supabaseAdmin.from("orders").delete().eq("id", orderId);
   if (error) console.error("[DB] deleteOrder:", error.message);
 }
@@ -316,4 +317,18 @@ export async function getLastCompletedOrderWithItems(
       notes:        i.notes ?? null,
     })),
   };
+}
+
+export async function getOrderById(orderId: string): Promise<DbOrder | null> {
+  const { data, error } = await supabaseAdmin
+    .from("orders")
+    .select("*")
+    .eq("id", orderId)
+    .single();
+
+  if (error) {
+    if (error.code !== "PGRST116") console.error("[DB] getOrderById:", error.message);
+    return null;
+  }
+  return data as DbOrder;
 }

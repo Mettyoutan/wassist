@@ -18,10 +18,14 @@ export async function PATCH(
 
   const { id } = await params;
   const body = await request.json();
-  if (body.action !== "finish") {
+  
+  if (body.action === "finish") {
+    await updateOrderStatus(id, "DONE");
+    return NextResponse.json({ success: true });
+  } else if (body.action === "cancel") {
+    await updateOrderStatus(id, "CANCELLED");
+    return NextResponse.json({ success: true });
+  } else {
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   }
-
-  await updateOrderStatus(id, "DONE");
-  return NextResponse.json({ success: true });
 }

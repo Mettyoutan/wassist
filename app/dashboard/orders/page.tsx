@@ -3,7 +3,7 @@
 import OrderAccordion from "@/components/dashboard/OrderAccordion";
 import { useState, useEffect, useCallback } from "react";
 
-type Status = "pending" | "diproses" | "selesai";
+type Status = "pending" | "diproses" | "selesai" | "batal";
 type FilterTab = Status;
 
 interface OrderDetail {
@@ -13,7 +13,7 @@ interface OrderDetail {
   customer_phone: string;
   status: Status;
   date: string;
-  items: { name: string; qty: number }[];
+  items: { name: string; qty: number; price?: number }[];
   total: number;
 }
 
@@ -21,18 +21,14 @@ export default function OrderManagement() {
   const [orders, setOrders] = useState<OrderDetail[]>([]);
   const [activeTab, setActiveTab] = useState<FilterTab>("diproses");
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
 
   const fetchOrders = useCallback(async () => {
     try {
-      setError(false);
       const res = await fetch("/api/orders");
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setOrders(data.orders ?? []);
     } catch (err) {
       console.error("[Orders] fetch error:", err);
-      setError(true);
     } finally {
       setLoading(false);
     }
@@ -60,10 +56,27 @@ export default function OrderManagement() {
     }
   };
 
+  const cancelHandler = async (id: string) => {
+    try {
+      await fetch(`/api/orders/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "cancel" }),
+      });
+      setOrders((prev) =>
+        prev.map((o) => (o.id === id ? { ...o, status: "batal" as const } : o))
+      );
+      setActiveTab("batal");
+    } catch (err) {
+      console.error("[Orders] cancelHandler error:", err);
+    }
+  };
+
   const statusCount = {
     pending:  orders.filter((o) => o.status === "pending").length,
     diproses: orders.filter((o) => o.status === "diproses").length,
     selesai:  orders.filter((o) => o.status === "selesai").length,
+    batal:    orders.filter((o) => o.status === "batal").length,
   };
 
   const filteredDetails = orders.filter((o) => o.status === activeTab);
@@ -72,10 +85,11 @@ export default function OrderManagement() {
     pending:  "Pending",
     diproses: "Diproses",
     selesai:  "Selesai",
+    batal:    "Batal",
   };
 
   return (
-    <div className="card border-0 shadow-sm">
+    <div className="card border-0 shadow-sm" style={{ borderRadius: "14px" }}>
       <div className="card-body p-3">
         <div className="fw-semibold mb-1" style={{ fontSize: "14px" }}>
           Status Pesanan
@@ -88,57 +102,52 @@ export default function OrderManagement() {
           <div className="text-center py-4">
             <div className="spinner-border spinner-border-sm text-secondary" role="status" />
           </div>
-        ) : error ? (
-          <div className="text-center py-4">
-            <div className="text-muted mb-2" style={{ fontSize: "13px" }}>
-              Gagal memuat pesanan. Cek koneksi dan coba lagi.
-            </div>
-            <button
-              className="btn btn-sm btn-outline-secondary"
-              style={{ fontSize: "12px" }}
-              onClick={() => { setLoading(true); fetchOrders(); }}
-            >
-              Coba Lagi
-            </button>
-          </div>
         ) : (
           <>
-            <div className="row g-2 text-center">
-              <div className="col-4">
-                <div className="rounded-3 py-2" style={{ background: "#fef9c3" }}>
-                  <div className="fw-bold text-warning" style={{ fontSize: "20px" }}>
+            <div className="row g-2 text-center mb-3">
+              <div className="col-3">
+                <div className="rounded-3 py-2" style={{ background: "var(--color-status-pending-bg)" }}>
+                  <div className="fw-bold" style={{ fontSize: "18px", color: "var(--color-status-pending-text)" }}>
                     {statusCount.pending}
                   </div>
-                  <small className="text-warning">Pending</small>
+                  <small className="fw-semibold" style={{ fontSize: "10px", color: "var(--color-status-pending-text)" }}>Pending</small>
                 </div>
               </div>
-              <div className="col-4">
-                <div className="rounded-3 py-2" style={{ background: "#fee2e2" }}>
-                  <div className="fw-bold text-danger" style={{ fontSize: "20px" }}>
+              <div className="col-3">
+                <div className="rounded-3 py-2" style={{ background: "var(--color-status-process-bg)" }}>
+                  <div className="fw-bold" style={{ fontSize: "18px", color: "var(--color-status-process-text)" }}>
                     {statusCount.diproses}
                   </div>
-                  <small className="text-danger">Diproses</small>
+                  <small className="fw-semibold" style={{ fontSize: "10px", color: "var(--color-status-process-text)" }}>Diproses</small>
                 </div>
               </div>
-              <div className="col-4">
-                <div className="rounded-3 py-2" style={{ background: "#dcfce7" }}>
-                  <div className="fw-bold text-success" style={{ fontSize: "20px" }}>
+              <div className="col-3">
+                <div className="rounded-3 py-2" style={{ background: "var(--color-status-success-bg)" }}>
+                  <div className="fw-bold" style={{ fontSize: "18px", color: "var(--color-status-success-text)" }}>
                     {statusCount.selesai}
                   </div>
-                  <small className="text-success">Selesai</small>
+                  <small className="fw-semibold" style={{ fontSize: "10px", color: "var(--color-status-success-text)" }}>Selesai</small>
+                </div>
+              </div>
+              <div className="col-3">
+                <div className="rounded-3 py-2" style={{ background: "var(--color-status-danger-bg)" }}>
+                  <div className="fw-bold" style={{ fontSize: "18px", color: "var(--color-status-danger-text)" }}>
+                    {statusCount.batal}
+                  </div>
+                  <small className="fw-semibold" style={{ fontSize: "10px", color: "var(--color-status-danger-text)" }}>Batal</small>
                 </div>
               </div>
             </div>
 
-            <div className="fw-semibold mb-2 mt-3" style={{ fontSize: "14px" }}>
+            <div className="fw-semibold mb-2 mt-4" style={{ fontSize: "14px" }}>
               Ringkasan Pesanan
             </div>
 
             <div
-              className="d-flex gap-1 mb-3 overflow-auto pb-1"
+              className="d-flex gap-1.5 mb-3 overflow-auto pb-1"
               style={{ scrollbarWidth: "none" }}
             >
-              {(["pending", "diproses", "selesai"] as FilterTab[]).map((tab) => (
+              {(["pending", "diproses", "selesai", "batal"] as FilterTab[]).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
@@ -152,7 +161,11 @@ export default function OrderManagement() {
               ))}
             </div>
 
-            <OrderAccordion orders={filteredDetails} onFinish={finishHandler} />
+            <OrderAccordion 
+              orders={filteredDetails} 
+              onFinish={finishHandler} 
+              onCancel={cancelHandler}
+            />
           </>
         )}
       </div>

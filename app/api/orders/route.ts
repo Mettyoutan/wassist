@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getOrdersByTenant } from "@/server/db";
 import type { DbOrder } from "@/lib/types/db";
 
-function mapStatus(dbStatus: DbOrder["status"]): "pending" | "diproses" | "selesai" {
+function mapStatus(dbStatus: DbOrder["status"]): "pending" | "diproses" | "selesai" | "batal" {
   switch (dbStatus) {
     case "PENDING":
     case "AWAITING_PAYMENT":
@@ -11,6 +11,8 @@ function mapStatus(dbStatus: DbOrder["status"]): "pending" | "diproses" | "seles
     case "PAID":
     case "FULFILLED":
       return "diproses";
+    case "CANCELLED":
+      return "batal";
     case "DONE":
     default:
       return "selesai";
@@ -26,7 +28,6 @@ export async function GET() {
   const raw = await getOrdersByTenant(tenantId);
 
   const orders = raw
-    .filter((o) => o.status !== "CANCELLED")
     .map((o) => {
       const orderCode = o.midtrans_id ?? o.id.slice(-6).toUpperCase();
       return {
@@ -38,7 +39,7 @@ export async function GET() {
         status:    mapStatus(o.status),
         date:      fmt.format(new Date(o.created_at)),
         total:     o.total_amount,
-        items:     o.items.map((i) => ({ name: i.product_name, qty: i.qty })),
+        items:     o.items.map((i) => ({ name: i.product_name, qty: i.qty, price: i.price_at_order })),
       };
     });
 

@@ -7,10 +7,14 @@ import { getProductsByTenantAll,
          queryRevenueData,
          getLatestOrderByStatus,
          updateOrderStatus,
-         getUserById }                from "@/server/db";
+         getUserById,
+         getOrderItemsByOrderId,
+         decrementProductStock }      from "@/server/db";
 import { sendWhatsAppMessage }        from "@/lib/whatsapp";
 import { fulfillmentNotificationMessage,
-         orderDoneNotificationMessage } from "@/lib/response-template";
+         orderDoneNotificationMessage,
+         ownerMarkPaidMessage,
+         paymentSuccessMessage }         from "@/lib/response-template";
 import { generateRevenueResponse }    from "@/lib/owner/generator";
 import { parseOwnerCommand }          from "@/lib/owner/parser";
 import { setSession, clearSession }   from "@/lib/session";
@@ -127,6 +131,34 @@ export async function handleOwnerCommand(
         await sendWhatsAppMessage(customer.phone, orderDoneNotificationMessage(displayId));
       }
       await sendWhatsAppMessage(ownerPhone, `✅ Order *${displayId}* ditandai *selesai* — customer sudah dinotifikasi 🎉`);
+      break;
+    }
+
+    case "mark_paid": {
+      const order = await getLatestOrderByStatus(tenant.id, "AWAITING_PAYMENT");
+      if (!order) {
+        await sendWhatsAppMessage(ownerPhone, "Tidak ada order yang menunggu pembayaran saat ini 📭");
+        break;
+      }
+      try {
+        await updateOrderStatus(order.id, "PAID", "PAID");
+        // Decrement stock — Midtrans callback won't fire for manual payments
+        const items = await getOrderItemsByOrderId(order.id);
+        for (const item of items) {
+          await decrementProductStock(item.product_id, item.qty).catch((err) =>
+            console.error("[owner/mark_paid] stock decrement failed for", item.product_id, err)
+          );
+        }
+        const displayId = order.midtrans_id ?? order.id.slice(-6).toUpperCase();
+        const customer = await getUserById(order.customer_user_id);
+        if (customer?.phone) {
+          await sendWhatsAppMessage(customer.phone, paymentSuccessMessage(displayId));
+        }
+        await sendWhatsAppMessage(ownerPhone, ownerMarkPaidMessage(displayId));
+      } catch (err) {
+        console.error("[owner/mark_paid] failed:", err);
+        await sendWhatsAppMessage(ownerPhone, "Gagal mengupdate status order. Coba lagi ya 🙏");
+      }
       break;
     }
 
