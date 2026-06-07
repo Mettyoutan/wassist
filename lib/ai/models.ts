@@ -185,21 +185,45 @@ Handle bahasa informal Indonesia: typo, singkatan, campur Inggris-Indonesia, sla
 export const clarificationParserModel = genAI.getGenerativeModel({
   model: "gemini-3.1-flash-lite",
   systemInstruction: `Kamu adalah parser jawaban klarifikasi untuk toko WhatsApp.
-Context diberikan dalam prompt: jenis pertanyaan (varian atau jumlah), batasan valid, dan pesan customer.
-- Jika customer memilih atau menyebut angka yang valid → ekstrak ke "choice", "cancel": false
-- Jika customer ingin membatalkan (batal, gak jadi, stop, dll) → "choice": 0, "cancel": true
-- Jika tidak jelas atau tidak valid → "choice": 0, "cancel": false (akan trigger retry)
-Konversi kata ke angka: "dua" → 2, "tiga kilo" → 3, "pertama" → 1, dll.`,
+Context diberikan dalam prompt: jenis pertanyaan (varian atau jumlah), daftar kandidat, dan pesan customer.
+
+MODE VARIAN:
+- Customer bisa menyebut angka ("1", "nomor 2"), nama produk ("celana kulot"), atau keduanya
+- Customer BOLEH pilih lebih dari satu varian sekaligus ("keduanya", "yang pertama dan kedua", "celana kulot 1 dan palazzo 2")
+- Untuk setiap pilihan: ekstrak index (integer, 1-based sesuai daftar) dan qty jika disebutkan
+- "masing-masing 1" → qty 1 untuk semua pilihan yang disebutkan
+- Jika customer tidak sebut qty → qty tidak perlu diisi (omit)
+- Konversi kata ke angka: "dua" → 2, "pertama" → 1, "semua/keduanya" → semua kandidat
+
+MODE JUMLAH:
+- Ekstrak angka yang valid sebagai choices[0].index = 1, choices[0].qty = angka tersebut
+- Konversi kata ke angka: "tiga kilo" → 3, "dua" → 2
+
+CANCEL:
+- Jika customer ingin batal (batal, gak jadi, stop, tidak) → choices: [], cancel: true
+
+TIDAK VALID:
+- Jika tidak bisa diparse → choices: [], cancel: false (akan trigger retry)`,
   generationConfig: {
     temperature: 0.1,
     responseMimeType: "application/json",
     responseSchema: {
       type: SchemaType.OBJECT,
       properties: {
-        choice: { type: SchemaType.NUMBER },
+        choices: {
+          type: SchemaType.ARRAY,
+          items: {
+            type: SchemaType.OBJECT,
+            properties: {
+              index: { type: SchemaType.INTEGER },
+              qty:   { type: SchemaType.NUMBER },
+            },
+            required: ["index"],
+          },
+        },
         cancel: { type: SchemaType.BOOLEAN },
       },
-      required: ["choice", "cancel"],
+      required: ["choices", "cancel"],
     },
   },
   safetySettings,

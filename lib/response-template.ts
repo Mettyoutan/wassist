@@ -71,7 +71,7 @@ export function variantClarificationMessage(
   const list = candidates
     .map((c, i) => `${i + 1}. ${c.name}${qtyLabel} — Rp${c.price.toLocaleString("id-ID")}/${c.unit}`)
     .join("\n");
-  return `Ada beberapa varian kak, yang mana? 😊\n\n${list}\n\nBalas nomornya ya!`;
+  return `Ada beberapa varian kak, yang mana? 😊\n\n${list}\n\nBalas nomornya atau nama produknya ya! Boleh pilih lebih dari satu 😊`;
 }
 
 export function quantityClarificationMessage(
@@ -270,4 +270,8 @@ export function addressConfirmMessage(savedAddress: string): string {
     `*${savedAddress}*\n\n` +
     `Balas *ya* untuk konfirmasi, ketik *batal* untuk membatalkan, atau ketik alamat baru 😊`
   );
+}
+
+export function clarificationOutOfStockMessage(): string {
+  return "Maaf kak, stok tidak mencukupi untuk semua pilihan tersebut 😢 Ketik *menu* untuk lihat stok terkini.";
 }
