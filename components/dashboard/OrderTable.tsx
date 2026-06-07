@@ -2,7 +2,7 @@ import { link } from "fs";
 import StatusBadge from "./StatusBadge";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-type Status = "pending" | "diproses" | "selesai";
+type Status = "pending" | "diproses" | "selesai" | "batal";
 
 interface Order {
   order_id: string;

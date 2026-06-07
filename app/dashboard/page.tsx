@@ -16,7 +16,7 @@ type OrderRow = {
   customer: string;
   customer_phone: string;
   total: number;
-  status: "pending" | "diproses" | "selesai";
+  status: "pending" | "diproses" | "selesai" | "batal";
 };
 
 export default function DashboardPage() {

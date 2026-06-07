@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getProductsForDashboard, queryRevenueData } from "@/server/db";
+import { createProduct, getProductsForDashboard, queryRevenueData } from "@/server/db";
 
 function toStockStatus(stock: number, reorder: number): "habis" | "menipis" | "aman" {
   if (stock <= 0) return "habis";

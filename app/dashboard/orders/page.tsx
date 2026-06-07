@@ -137,6 +137,14 @@ export default function OrderManagement() {
                   <small className="fw-semibold" style={{ fontSize: "10px", color: "var(--color-status-danger-text)" }}>Batal</small>
                 </div>
               </div>
+              <div className="col-3">
+                <div className="rounded-3 py-2" style={{ background: "#cdd7d0" }}>
+                  <div className="fw-bold text-secondary" style={{ fontSize: "20px" }}>    
+                    {statusCount.batal}
+                  </div>
+                  <small className="text-secondary">Batal</small>
+                </div>
+              </div>
             </div>
 
             <div className="fw-semibold mb-2 mt-4" style={{ fontSize: "14px" }}>
