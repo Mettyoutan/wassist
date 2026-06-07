@@ -21,6 +21,8 @@ export async function GET() {
   const result = products.map((p) => ({
     id:        p.id,
     name:      p.name,
+    description: p.description,
+    category: p.category,
     stock:     p.stock,
     unit:      p.unit,
     price:     p.price,
@@ -44,7 +46,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Name, price, and unit are required" }, { status: 400 });
     }
 
-    const { createProduct } = await import("@/server/db");
     const result = await createProduct(
       tenantId,
       body.name,
@@ -54,7 +55,8 @@ export async function POST(request: Request) {
       Number(body.reorder_point || 5),
       body.image_url || "",
       body.category || "",
-      body.description || ""
+      body.description || "",
+      body.meta_retailer_id || ""
     );
 
     if (!result) {

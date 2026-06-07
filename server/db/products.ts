@@ -1,3 +1,4 @@
+import { meta } from "zod/v4/core";
 import { supabaseAdmin } from "./client";
 import type { DbProduct } from "@/lib/types/db";
 
@@ -96,16 +97,16 @@ export async function setProductActive(productId: string, isActive: boolean): Pr
 // BERBEDA dari getActiveProducts yang hanya return name/price/unit untuk Gemini prompt.
 export async function getProductsForDashboard(
   tenantId: string
-): Promise<Pick<DbProduct, "id" | "name" | "price" | "unit" | "stock" | "reorder_point" | "image_url">[]> {
+): Promise<Pick<DbProduct, "id" | "name" | "description" | "category" | "price" | "unit" | "stock" | "reorder_point" | "image_url">[]> {
   const { data, error } = await supabaseAdmin
     .from("products")
-    .select("id, name, price, unit, stock, reorder_point, image_url")
+    .select("id, name, description, category, price, unit, stock, reorder_point, image_url")
     .eq("tenant_id", tenantId)
     .eq("is_active", true)
     .order("name", { ascending: true });
 
   if (error) console.error("[DB] getProductsForDashboard:", error.message);
-  return (data ?? []) as Pick<DbProduct, "id" | "name" | "price" | "unit" | "stock" | "reorder_point" | "image_url">[];
+  return (data ?? []) as Pick<DbProduct, "id" | "name" | "description" | "category" | "price" | "unit" | "stock" | "reorder_point" | "image_url">[];
 }
 
 // Supabase JS tidak support atomic decrement → fetch + update (acceptable untuk hackathon).
@@ -130,15 +131,15 @@ export async function decrementProductStock(productId: string, qty: number): Pro
 // bisa melihat produk yang sedang nonaktif.
 export async function getProductsByTenantAll(
   tenantId: string
-): Promise<Pick<DbProduct, "id" | "name" | "price" | "unit" | "stock" | "reorder_point" | "is_active">[]> {
+): Promise<Pick<DbProduct, "id" | "name" | "description" | "category" | "price" | "unit" | "stock" | "reorder_point" | "is_active">[]> {
   const { data, error } = await supabaseAdmin
     .from("products")
-    .select("id, name, price, unit, stock, reorder_point, is_active")
+    .select("id, name, description, category, price, unit, stock, reorder_point, is_active")
     .eq("tenant_id", tenantId)
     .order("name", { ascending: true });
 
   if (error) console.error("[DB] getProductsByTenantAll:", error.message);
-  return (data ?? []) as Pick<DbProduct, "id" | "name" | "price" | "unit" | "stock" | "reorder_point" | "is_active">[];
+  return (data ?? []) as Pick<DbProduct, "id" | "name" | "description" | "category" | "price" | "unit" | "stock" | "reorder_point" | "is_active">[];
 }
 
 export async function createProduct(
@@ -150,7 +151,8 @@ export async function createProduct(
   reorderPoint: number,
   imageUrl?: string,
   category?: string,
-  description?: string
+  description?: string,
+  metaRetailerId?: string
 ): Promise<{ id: string } | null> {
   const { data, error } = await supabaseAdmin
     .from("products")
@@ -164,6 +166,7 @@ export async function createProduct(
       image_url: imageUrl || null,
       category: category || null,
       description: description || null,
+      meta_retailer_id: metaRetailerId || null,
       is_active: true
     })
     .select("id")
@@ -211,6 +214,7 @@ export async function updateProduct(
     image_url?: string;
     category?: string;
     description?: string;
+    meta_retailer_id?: string;
   }
 ): Promise<void> {
   const { error } = await supabaseAdmin
@@ -221,7 +225,19 @@ export async function updateProduct(
     })
     .eq("id", productId);
 
+    console.log("Updated data:", updates); // ← cek hasilnya
+    console.log("Error:", error);
+
   if (error) throw new Error(`[DB] updateProduct: ${error.message}`);
+}
+
+export async function deleteProduct(productId: string): Promise<void> {
+  const { error } = await supabaseAdmin
+    .from("products")
+    .delete()
+    .eq("id", productId);
+
+  if (error) throw new Error(`[DB] deleteProduct: ${error.message}`);
 }
 
 export type ProductStockStatus = {

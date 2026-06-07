@@ -48,6 +48,8 @@ export default function OrderManagement() {
         body: JSON.stringify({ action: "finish" }),
       });
       setOrders((prev) =>
+
+        
         prev.map((o) => (o.id === id ? { ...o, status: "selesai" as const } : o))
       );
       setActiveTab("selesai");
