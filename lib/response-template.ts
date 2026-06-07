@@ -283,6 +283,14 @@ export function addressConfirmMessage(savedAddress: string): string {
   );
 }
 
+export function handoffCustomerMessage(): string {
+  return "Maaf kak, ada yang perlu dibantu lebih lanjut nih. Admin kami akan segera membalas ya! 🙏";
+}
+
+export function handoffOwnerAlertMessage(customerPhone: string): string {
+  return `⚠️ Ada pesan dari ${customerPhone} yang perlu ditangani manual.`;
+}
+
 export function clarificationOutOfStockMessage(): string {
   return "Maaf kak, stok tidak mencukupi untuk semua pilihan tersebut 😢 Ketik *menu* untuk lihat stok terkini.";
 }

@@ -19,11 +19,16 @@ const ClarificationSchema = z.object({
 
 export type ClarificationChoice = { index: number; qty?: number };
 
-export async function parseConfirmationIntent(text: string): Promise<ConfirmationSignal> {
+export async function parseConfirmationIntent(
+  text: string,
+  context: "customer" | "owner" = "customer",
+): Promise<ConfirmationSignal> {
+  const prompt =
+    context === "owner"
+      ? `Konteks: owner toko mengkonfirmasi perubahan data produk/toko.\nPesan owner: "${text}"`
+      : `Pesan customer: "${text}"`;
   try {
-    const result = await confirmationParserModel.generateContent(
-      `Pesan customer/owner: "${text}"`
-    );
+    const result = await confirmationParserModel.generateContent(prompt);
     const raw = JSON.parse(result.response.text());
     const parsed = ConfirmSchema.safeParse(raw);
     return parsed.success ? parsed.data.signal : "ambiguous";

@@ -324,7 +324,7 @@ async function handleOwnerConfirmation(
     return;
   }
 
-  const signal = await parseConfirmationIntent(text);
+  const signal = await parseConfirmationIntent(text, "owner");
   if (signal === "cancel") {
     clearSession(tenant.id, ownerPhone);
     await sendWhatsAppMessage(ownerPhone, "Dibatalkan 👍");
