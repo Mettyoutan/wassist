@@ -3,7 +3,7 @@
 import OrderAccordion from "@/components/dashboard/OrderAccordion";
 import { useState, useEffect, useCallback } from "react";
 
-type Status = "pending" | "diproses" | "selesai";
+type Status = "pending" | "diproses" | "selesai" | "batal";
 type FilterTab = Status;
 
 interface OrderDetail {
@@ -64,6 +64,7 @@ export default function OrderManagement() {
     pending:  orders.filter((o) => o.status === "pending").length,
     diproses: orders.filter((o) => o.status === "diproses").length,
     selesai:  orders.filter((o) => o.status === "selesai").length,
+    batal:  orders.filter((o) => o.status === "batal").length,
   };
 
   const filteredDetails = orders.filter((o) => o.status === activeTab);
@@ -72,6 +73,7 @@ export default function OrderManagement() {
     pending:  "Pending",
     diproses: "Diproses",
     selesai:  "Selesai",
+    batal: "Batal"
   };
 
   return (
@@ -104,7 +106,7 @@ export default function OrderManagement() {
         ) : (
           <>
             <div className="row g-2 text-center">
-              <div className="col-4">
+              <div className="col-3">
                 <div className="rounded-3 py-2" style={{ background: "#fef9c3" }}>
                   <div className="fw-bold text-warning" style={{ fontSize: "20px" }}>
                     {statusCount.pending}
@@ -112,7 +114,7 @@ export default function OrderManagement() {
                   <small className="text-warning">Pending</small>
                 </div>
               </div>
-              <div className="col-4">
+              <div className="col-3">
                 <div className="rounded-3 py-2" style={{ background: "#fee2e2" }}>
                   <div className="fw-bold text-danger" style={{ fontSize: "20px" }}>
                     {statusCount.diproses}
@@ -120,12 +122,20 @@ export default function OrderManagement() {
                   <small className="text-danger">Diproses</small>
                 </div>
               </div>
-              <div className="col-4">
+              <div className="col-3">
                 <div className="rounded-3 py-2" style={{ background: "#dcfce7" }}>
                   <div className="fw-bold text-success" style={{ fontSize: "20px" }}>
                     {statusCount.selesai}
                   </div>
                   <small className="text-success">Selesai</small>
+                </div>
+              </div>
+              <div className="col-3">
+                <div className="rounded-3 py-2" style={{ background: "#cdd7d0" }}>
+                  <div className="fw-bold text-secondary" style={{ fontSize: "20px" }}>    
+                    {statusCount.batal}
+                  </div>
+                  <small className="text-secondary">Batal</small>
                 </div>
               </div>
             </div>
@@ -138,7 +148,7 @@ export default function OrderManagement() {
               className="d-flex gap-1 mb-3 overflow-auto pb-1"
               style={{ scrollbarWidth: "none" }}
             >
-              {(["pending", "diproses", "selesai"] as FilterTab[]).map((tab) => (
+              {(["pending", "diproses", "selesai", "batal"] as FilterTab[]).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}

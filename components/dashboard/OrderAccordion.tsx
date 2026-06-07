@@ -1,6 +1,6 @@
 import StatusBadge from "./StatusBadge";
 
-type Status = "pending" | "diproses" | "selesai";
+type Status = "pending" | "diproses" | "selesai" | "batal";
 
 interface OrderItem {
   name: string;

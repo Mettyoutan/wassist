@@ -13,6 +13,7 @@
   --color-text:       #111827;
   --color-text-muted: #6B7280;
   --color-border:     #E5E7EB;
+  --color-cancelled:  #6b7280;
 
   /* Legacy aliases */
   --primary:  var(--color-primary);

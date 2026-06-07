@@ -140,3 +140,22 @@ export async function getProductsByTenantAll(
   if (error) console.error("[DB] getProductsByTenantAll:", error.message);
   return (data ?? []) as Pick<DbProduct, "id" | "name" | "price" | "unit" | "stock" | "reorder_point" | "is_active">[];
 }
+
+export async function createProduct(data: {
+  tenant_id: string
+  name: string
+  description: string
+  price: number
+  stock: number
+  category: string
+}) {
+  const { data: result, error } = await supabaseAdmin
+    .from('products')
+    .insert([data])
+    .select()
+    .single()
+
+  if (error) throw new Error(error.message)
+
+  return result
+}

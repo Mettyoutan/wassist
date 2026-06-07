@@ -1,4 +1,4 @@
-type Status = 'pending' | 'diproses' | 'selesai'
+type Status = 'pending' | 'diproses' | 'selesai' | 'batal'
 
 interface StatusBadgeProps {
   status: Status
@@ -8,6 +8,7 @@ const statusConfig: Record<Status, { label: string; bg: string; color: string }>
   pending:  { label: 'Pending',  bg: 'var(--color-warning)', color: 'white' },
   diproses: { label: 'Diproses', bg: 'var(--color-blue)',    color: 'white' },
   selesai:  { label: 'Selesai',  bg: 'var(--color-accent)',  color: 'white' },
+  batal:  { label: 'Batal',  bg: 'var(--color-cancelled)',  color: 'white' },
 }
 
 export default function StatusBadge({ status }: StatusBadgeProps) {
