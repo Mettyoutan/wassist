@@ -10,6 +10,7 @@ interface OrderDetail {
   id: string;
   orderCode: string;
   customer: string;
+  customer_phone: string;
   status: Status;
   date: string;
   items: { name: string; qty: number }[];
@@ -20,14 +21,18 @@ export default function OrderManagement() {
   const [orders, setOrders] = useState<OrderDetail[]>([]);
   const [activeTab, setActiveTab] = useState<FilterTab>("diproses");
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   const fetchOrders = useCallback(async () => {
     try {
+      setError(false);
       const res = await fetch("/api/orders");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setOrders(data.orders ?? []);
     } catch (err) {
       console.error("[Orders] fetch error:", err);
+      setError(true);
     } finally {
       setLoading(false);
     }
@@ -82,6 +87,19 @@ export default function OrderManagement() {
         {loading ? (
           <div className="text-center py-4">
             <div className="spinner-border spinner-border-sm text-secondary" role="status" />
+          </div>
+        ) : error ? (
+          <div className="text-center py-4">
+            <div className="text-muted mb-2" style={{ fontSize: "13px" }}>
+              Gagal memuat pesanan. Cek koneksi dan coba lagi.
+            </div>
+            <button
+              className="btn btn-sm btn-outline-secondary"
+              style={{ fontSize: "12px" }}
+              onClick={() => { setLoading(true); fetchOrders(); }}
+            >
+              Coba Lagi
+            </button>
           </div>
         ) : (
           <>

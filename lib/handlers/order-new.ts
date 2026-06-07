@@ -93,10 +93,11 @@ async function classifyItem(
 }
 
 export async function handleOrderIntent(
-  tenant:      DbTenant,
-  senderPhone: string,
-  products:    Array<{ name: string; price: number; unit: string }>,
-  parsedItems: ParsedIntent["items"]
+  tenant:        DbTenant,
+  senderPhone:   string,
+  products:      Array<{ name: string; price: number; unit: string }>,
+  parsedItems:   ParsedIntent["items"],
+  existingItems: PendingOrderItem[] = []
 ): Promise<void> {
   if (!tenant.is_open) {
     await sendWhatsAppMessage(senderPhone, storeClosedMessage(tenant.closed_until));
@@ -203,6 +204,8 @@ export async function handleOrderIntent(
   }
 
   if (clarification !== null) {
+    // Preserve existing items so clarification flow can merge them back
+    clarification.resolved = [...existingItems, ...clarification.resolved];
     setSession(tenant.id, senderPhone, {
       state:                 "awaiting_clarification",
       pending_clarification: clarification,
@@ -231,14 +234,15 @@ export async function handleOrderIntent(
     return;
   }
 
-  const total = resolvedItems.reduce((sum, i) => sum + i.subtotal, 0);
+  const allItems = [...existingItems, ...resolvedItems];
+  const total    = allItems.reduce((sum, i) => sum + i.subtotal, 0);
   await sendWhatsAppMessage(
     senderPhone,
-    orderConfirmationMessage(resolvedItems, total, notFoundNames.length > 0 ? notFoundNames : undefined)
+    orderConfirmationMessage(allItems, total, notFoundNames.length > 0 ? notFoundNames : undefined)
   );
   setSession(tenant.id, senderPhone, {
     state:         "awaiting_confirmation",
-    pending_order: { items: resolvedItems, total },
+    pending_order: { items: allItems, total },
     retry_count:   0,
     last_updated:  Date.now(),
   });

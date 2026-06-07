@@ -125,3 +125,18 @@ export async function decrementProductStock(productId: string, qty: number): Pro
     .eq("id", productId);
   if (error) throw new Error(`[DB] decrementProductStock update: ${error.message}`);
 }
+
+// Fetch ALL products (active + inactive) — dipakai owner handler agar activate_product
+// bisa melihat produk yang sedang nonaktif.
+export async function getProductsByTenantAll(
+  tenantId: string
+): Promise<Pick<DbProduct, "id" | "name" | "price" | "unit" | "stock" | "reorder_point" | "is_active">[]> {
+  const { data, error } = await supabaseAdmin
+    .from("products")
+    .select("id, name, price, unit, stock, reorder_point, is_active")
+    .eq("tenant_id", tenantId)
+    .order("name", { ascending: true });
+
+  if (error) console.error("[DB] getProductsByTenantAll:", error.message);
+  return (data ?? []) as Pick<DbProduct, "id" | "name" | "price" | "unit" | "stock" | "reorder_point" | "is_active">[];
+}

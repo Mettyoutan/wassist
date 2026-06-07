@@ -28,3 +28,18 @@ export async function setStoreStatus(tenantId: string, isOpen: boolean): Promise
     .eq("id", tenantId);
   if (error) throw new Error(`[DB] setStoreStatus: ${error.message}`);
 }
+
+export async function getTenantById(
+  tenantId: string
+): Promise<{ name: string; owner_phone: string } | null> {
+  const { data, error } = await supabaseAdmin
+    .from("tenants")
+    .select("name, owner_phone")
+    .eq("id", tenantId)
+    .single();
+  if (error) {
+    if (error.code !== "PGRST116") console.error("[DB] getTenantById:", error.message);
+    return null;
+  }
+  return data;
+}

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { queryRevenueData, getOrdersByTenant } from "@/server/db";
-import { supabaseAdmin } from "@/server/db";
+import { queryRevenueData, getOrdersByTenant, getTenantById } from "@/server/db";
 
 export async function GET(request: NextRequest) {
   const tenantId = process.env.DEMO_TENANT_ID;
@@ -8,10 +7,10 @@ export async function GET(request: NextRequest) {
 
   const period = request.nextUrl.searchParams.get("period") ?? "hari ini";
 
-  const [kpiData, allOrders, tenantRow] = await Promise.all([
+  const [kpiData, allOrders, tenant] = await Promise.all([
     queryRevenueData(tenantId, period),
     getOrdersByTenant(tenantId),
-    supabaseAdmin.from("tenants").select("name").eq("id", tenantId).single(),
+    getTenantById(tenantId),
   ]);
 
   const pendingCount = allOrders.filter(
@@ -21,6 +20,6 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     ...kpiData,
     pendingCount,
-    tenantName: tenantRow.data?.name ?? "",
+    tenantName: tenant?.name ?? "",
   });
 }

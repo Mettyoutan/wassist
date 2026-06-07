@@ -26,21 +26,36 @@ export function itemsNotFoundMessage(names: string[]): string {
 }
 
 
-export function paymentLinkMessage(total: number, url: string): string {
-    return `💳 *Selesaikan Pembayaran*
-    
-    Total: Rp${total.toLocaleString("id-ID")}
-    Bayar via QRIS → ${url}
-    
-    _Link berlaku 15 menit_`;
-};
+export function paymentLinkMessage(total: number, url: string, orderId?: string): string {
+  const urlLine     = url     ? `Bayar via QRIS: ${url}\n`          : "";
+  const scanNote    = url     ? ""                                    : `Scan QR code yang sudah dikirim ya kak 📱\n`;
+  const orderIdLine = orderId ? `No. Order: \`${orderId}\`\n`        : "";
+  return (
+    `💳 *Selesaikan Pembayaran*\n\n` +
+    `Total: Rp${total.toLocaleString("id-ID")}\n` +
+    urlLine +
+    scanNote +
+    orderIdLine +
+    `_Berlaku 15 menit_`
+  );
+}
+
+export function qrPaymentCaption(total: number, orderId: string): string {
+  return (
+    `💳 Scan QR untuk bayar kak 😊\n` +
+    `*Total: Rp${total.toLocaleString("id-ID")}*\n` +
+    `No. Order: \`${orderId}\`\n` +
+    `_Berlaku 15 menit_`
+  );
+}
 
 // Pembayaran diterima
 export function paymentSuccessMessage(orderId: string): string {
-  return `✅ *Pembayaran Diterima!*
-  
-  Order #${orderId} sedang diproses ya kak 🎉
-  Nanti kami kabari kalau sudah dikirim!`;
+  return (
+    `✅ *Pembayaran Diterima!*\n\n` +
+    `Order \`${orderId}\` sedang diproses ya kak 🎉\n` +
+    `Nanti kami kabari kalau sudah dikirim!`
+  );
 }
 
 export function storeClosedMessage(closedUntil?: string | null): string {
@@ -86,3 +101,121 @@ export const statusMessages: Record<string, string> = {
   DONE:              "Pesananmu sudah selesai. Terima kasih ya kak! 💚",
   CANCELLED:         "Pesananmu sudah dibatalkan.",
 };
+
+export function cancelOrderMessage(): string {
+  return (
+    `Untuk membatalkan pesanan kak:\n\n` +
+    `• Pesanan *belum bayar*: balas *batal* saat bot tampilkan ringkasan pesanan\n` +
+    `• Pesanan *sudah bayar*: hubungi kami langsung ya, kami bantu proses 🙏\n\n` +
+    `Ada yang bisa dibantu lagi?`
+  );
+}
+
+export function repeatLastNotFoundMessage(): string {
+  return `Belum ada pesanan selesai sebelumnya kak 😊 Ketik *menu* untuk lihat koleksi kami!`;
+}
+
+export function repeatLastUnavailableMessage(unavailable: string[]): string {
+  const list = unavailable.map((n) => `• ${n}`).join("\n");
+  return (
+    `Maaf kak, semua produk dari pesanan sebelumnya sudah tidak tersedia:\n${list}\n\n` +
+    `Ketik *menu* untuk lihat koleksi terbaru kami 😊`
+  );
+}
+
+export function confirmationPendingMessage(): string {
+  return (
+    `Pesananmu masih menunggu konfirmasi ya kak 😊\n\n` +
+    `• Balas *ya* untuk lanjut bayar\n` +
+    `• Balas *batal* untuk ubah atau batalkan pesanan`
+  );
+}
+
+// Dipanggil saat customer kirim modify_order di dalam awaiting_confirmation
+export function modifyOrderInConfirmationMessage(): string {
+  return (
+    `Untuk ubah atau hapus item, balas *batal* lalu pesan ulang lengkap ya kak 😊\n\n` +
+    `Atau langsung sebutkan item *tambahan* yang mau ditambahkan ke pesanan!`
+  );
+}
+
+// Dipanggil saat customer kirim modify_order di luar konteks order aktif
+export function modifyOrderHandoffMessage(): string {
+  return (
+    `Untuk mengubah pesanan yang sudah dibayar, hubungi admin kami langsung ya kak 🙏\n\n` +
+    `Kalau pesanan belum dikonfirmasi, balas *batal* dan pesan ulang dengan item lengkap.`
+  );
+}
+
+// Notif customer saat owner tandai FULFILLED (barang dikirim)
+export function fulfillmentNotificationMessage(orderId: string): string {
+  return (
+    `🚚 *Pesananmu Sedang Dikirim!*\n\n` +
+    `Order \`${orderId}\` sudah dalam perjalanan ya kak 😊\n` +
+    `Ditunggu dan terima kasih sudah belanja! 💚`
+  );
+}
+
+// Notif customer saat owner tandai DONE (selesai)
+export function orderDoneNotificationMessage(orderId: string): string {
+  return (
+    `✅ *Pesananmu Sudah Selesai!*\n\n` +
+    `Order \`${orderId}\` sudah diterima ya kak 🎉\n` +
+    `Terima kasih sudah belanja! Sampai ketemu lagi 💚`
+  );
+}
+
+export function orderStatusMessage(
+  displayId: string,
+  status:    string,
+  items:     Array<{ product_name: string; qty: number; unit: string }>,
+  total:     number
+): string {
+  const statusLabels: Record<string, string> = {
+    PENDING:          "Menunggu konfirmasi 🕐",
+    CONFIRMED:        "Dikonfirmasi, sedang dipersiapkan 👍",
+    AWAITING_PAYMENT: "Menunggu pembayaran 💳 Scan QR yang sudah dikirim ya kak.",
+    PAID:             "Pembayaran diterima, sedang diproses 🎉",
+    FULFILLED:        "Sedang dalam pengiriman 🚚",
+    DONE:             "Pesanan selesai. Terima kasih! 💚",
+  };
+
+  const itemLines = items.length > 0
+    ? items.map(i => `• ${i.product_name} x${i.qty} ${i.unit}`).join("\n")
+    : "_Detail item tidak tersedia_";
+
+  return (
+    `📦 *Order \`${displayId}\`*\n` +
+    `Status: ${statusLabels[status] ?? status}\n\n` +
+    `${itemLines}\n\n` +
+    `*Total: Rp${total.toLocaleString("id-ID")}*`
+  );
+}
+
+export function addressRequestMessage(): string {
+  return (
+    `📦 Hampir selesai kak!\n\n` +
+    `Mau dikirim ke alamat mana? Ketik alamat lengkap ya 😊\n` +
+    `_Contoh: Jl. Merdeka No. 12, Kel. Sukamaju, Depok 16451_`
+  );
+}
+
+export function ownerNewOrderMessage(
+  senderPhone: string,
+  total:       number,
+  itemSummary: string,
+  midtransId:  string,
+  address?:    string
+): string {
+  const addressLine = address
+    ? `Alamat: ${address}\n`
+    : `Alamat: _belum diisi_\n`;
+  return (
+    `🛒 *Order baru!*\n` +
+    `Dari: ${senderPhone}\n` +
+    `Total: *Rp${total.toLocaleString("id-ID")}*\n` +
+    `Item: ${itemSummary}\n` +
+    addressLine +
+    `Order ID: ${midtransId}`
+  );
+}

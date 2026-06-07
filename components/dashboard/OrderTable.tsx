@@ -7,6 +7,7 @@ type Status = "pending" | "diproses" | "selesai";
 interface Order {
   order_id: string;
   customer: string;
+  customer_phone: string;
   total: number;
   status: Status;
 }
@@ -35,8 +36,8 @@ export default function OrderTable({ orders }: OrderTableProps) {
         <table className="table table-sm mb-0" style={{ fontSize: "12px" }}>
           <thead className="table-light">
             <tr>
-              <th className="ps-3 py-2 fw-semibold text-muted">Customer ID</th>
-              <th className="py-2 fw-semibold text-muted">Nama pelanggan</th>
+              <th className="ps-3 py-2 fw-semibold text-muted">Nama Pelanggan</th>
+              <th className="py-2 fw-semibold text-muted">No. HP</th>
               <th className="py-2 fw-semibold text-muted">Total</th>
               <th className="py-2 fw-semibold text-muted">Status</th>
             </tr>
@@ -44,8 +45,8 @@ export default function OrderTable({ orders }: OrderTableProps) {
           <tbody>
             {orders.map((order) => (
               <tr key={order.order_id}>
-                <td className="ps-3 py-2 text-muted">{order.order_id}</td>
-                <td className="py-2">{order.customer}</td>
+                <td className="ps-3 py-2">{order.customer}</td>
+                <td className="py-2 text-muted">{order.customer_phone}</td>
                 <td className="py-2">
                   Rp {order.total.toLocaleString("id-ID")}
                 </td>

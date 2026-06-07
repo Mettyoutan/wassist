@@ -1,14 +1,21 @@
 import { NextRequest, NextResponse }    from "next/server";
 import { getTenantByWaPhoneId,
          upsertCustomer,
-         getActiveProducts }             from "@/server/db";
+         getActiveProducts,
+         updateOrderStatus }             from "@/server/db";
 import { getSession,
-         clearSession }                  from "@/lib/session";
+         setSession,
+         clearSession,
+         cleanupExpiredSessions }        from "@/lib/session";
 import { parseCustomerMessage }          from "@/lib/ai/customer-parser";
 import { sendWhatsAppMessage }           from "@/lib/whatsapp";
-import { CONFIRM_KEYWORDS,
-         CANCEL_KEYWORDS }               from "@/lib/constants/confirmation-keywords";
-import { greetingMessage }               from "@/lib/response-template";
+import { parseConfirmationIntent }        from "@/lib/ai/confirmation-parser";
+import { greetingMessage,
+         cancelOrderMessage,
+         confirmationPendingMessage,
+         modifyOrderInConfirmationMessage,
+         modifyOrderHandoffMessage,
+         addressRequestMessage }        from "@/lib/response-template";
 import { handleBrowseIntent }            from "@/lib/handlers/browse";
 import { handleStatusIntent }            from "@/lib/handlers/status";
 import { handleHandoffIntent }           from "@/lib/handlers/handoff";
@@ -17,6 +24,7 @@ import { handleClarificationAnswer }   from "@/lib/handlers/clarification";
 import { processOrderConfirmation }    from "@/lib/handlers/confirm-order";
 import { handleCartOrder }               from "@/lib/handlers/cart-order";
 import { handleOwnerCommand }            from "@/lib/handlers/owner";
+import { handleRepeatLastIntent }        from "@/lib/handlers/repeat-last";
 import type { DbTenant }                 from "@/lib/types/db";
 import type { WAWebhookBody, WAMessage,
               WATextMessage,
@@ -35,8 +43,12 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 }
 
+// Cleanup setiap 50 request — cegah memory leak tanpa overhead per-request
+let _reqCount = 0;
+
 // ─── POST: Semua pesan masuk dari Meta ───────────────────────────────────────
 export async function POST(request: NextRequest) {
+  if (++_reqCount % 50 === 0) cleanupExpiredSessions();
   try {
     const body  = (await request.json()) as WAWebhookBody;
     const value = body.entry?.[0]?.changes?.[0]?.value;
@@ -76,20 +88,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ status: "ok" });
     }
 
+    // Get WA message
     const textMsg    = message as WATextMessage;
     const msgText    = textMsg.text.body;
+
+    // Get current session
     const session    = getSession(tenant.id, senderPhone);
 
     // ── STATE MACHINE — cek dulu sebelum Gemini ──────────────────────────────
     if (session.state === "awaiting_confirmation") {
-      const normalized = msgText.toLowerCase().trim();
+      const signal = await parseConfirmationIntent(msgText);
 
-      if (CONFIRM_KEYWORDS.has(normalized)) {
-        await processOrderConfirmation(tenant, senderPhone, session);
+      if (signal === "confirm") {
+        setSession(tenant.id, senderPhone, {
+          ...session,
+          state:        "awaiting_address",
+          last_updated: Date.now(),
+        });
+        await sendWhatsAppMessage(senderPhone, addressRequestMessage());
         return NextResponse.json({ status: "ok" });
       }
 
-      if (CANCEL_KEYWORDS.has(normalized)) {
+      if (signal === "cancel") {
         clearSession(tenant.id, senderPhone);
         await sendWhatsAppMessage(
           senderPhone,
@@ -98,26 +118,63 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ status: "ok" });
       }
 
-      // Bukan confirm/cancel → minta klarifikasi
-      await sendWhatsAppMessage(
-        senderPhone,
-        "Balas *ya* untuk konfirmasi atau *batal* untuk membatalkan pesanan ya kak 😊"
-      );
+      // signal === "ambiguous" → coba parse sebagai tambah item ke pesanan aktif
+      const productsForAdd = await getActiveProducts(tenant.id);
+      const parsedAdd = await parseCustomerMessage(msgText, productsForAdd, {
+        store_name:     tenant.name,
+        store_category: tenant.category ?? "toko online",
+        current_order:  session.pending_order?.items.map(i => ({
+          name: i.name, qty: i.qty, size: i.size,
+        })),
+      });
+      if (parsedAdd.intent === "order_new" && parsedAdd.items.length > 0) {
+        await handleOrderIntent(
+          tenant, senderPhone, productsForAdd, parsedAdd.items,
+          session.pending_order?.items ?? []
+        );
+      } else if (parsedAdd.intent === "modify_order") {
+        await sendWhatsAppMessage(senderPhone, modifyOrderInConfirmationMessage());
+      } else {
+        await sendWhatsAppMessage(senderPhone, confirmationPendingMessage());
+      }
+      return NextResponse.json({ status: "ok" });
+    }
+
+    if (session.state === "awaiting_address") {
+      const address = msgText.trim();
+      if (!address) {
+        await sendWhatsAppMessage(senderPhone, addressRequestMessage());
+        return NextResponse.json({ status: "ok" });
+      }
+      try {
+        await processOrderConfirmation(tenant, senderPhone, session, address);
+      } catch (err) {
+        console.error("[Webhook] processOrderConfirmation (awaiting_address) failed:", err);
+        clearSession(tenant.id, senderPhone);
+        await sendWhatsAppMessage(senderPhone, "Terjadi kesalahan saat memproses pesanan kak 🙏 Coba lagi ya.");
+      }
       return NextResponse.json({ status: "ok" });
     }
 
     if (session.state === "awaiting_clarification") {
-      const normalized = msgText.toLowerCase().trim();
-      if (CANCEL_KEYWORDS.has(normalized)) {
-        clearSession(tenant.id, senderPhone);
-        await sendWhatsAppMessage(senderPhone, "Pesanan dibatalkan ya kak 👍 Ketik *menu* untuk lihat katalog.");
-        return NextResponse.json({ status: "ok" });
-      }
       await handleClarificationAnswer(tenant, senderPhone, msgText, session);
       return NextResponse.json({ status: "ok" });
     }
 
     if (session.state === "awaiting_payment") {
+      const signal = await parseConfirmationIntent(msgText);
+      if (signal === "cancel") {
+        if (session.current_order_id) {
+          try {
+            await updateOrderStatus(session.current_order_id, "CANCELLED");
+          } catch (err) {
+            console.error("[Webhook] cancel order in awaiting_payment failed:", err);
+          }
+        }
+        clearSession(tenant.id, senderPhone);
+        await sendWhatsAppMessage(senderPhone, "Pesanan dibatalkan ya kak 👍 Ketik *menu* kalau mau lihat katalog lagi.");
+        return NextResponse.json({ status: "ok" });
+      }
       await sendWhatsAppMessage(
         senderPhone,
         "Pesananmu masih menunggu pembayaran ya kak 💳 Silakan scan QR yang sudah dikirim."
@@ -160,10 +217,23 @@ export async function POST(request: NextRequest) {
         await handleStatusIntent(tenant, senderPhone);
         break;
 
-      // Jalur cut MVP + low confidence → handoff
       case "repeat_last":
-      case "modify_order":
+        await handleRepeatLastIntent(tenant, senderPhone, session);
+        break;
+
       case "cancel_order":
+        await sendWhatsAppMessage(senderPhone, cancelOrderMessage());
+        break;
+
+      case "modify_order":
+        await sendWhatsAppMessage(senderPhone, modifyOrderHandoffMessage());
+        await sendWhatsAppMessage(
+          tenant.owner_phone,
+          `⚠️ ${senderPhone} ingin modifikasi pesanan — perlu penanganan manual.`
+        );
+        break;
+
+      // low confidence → generic handoff
       case "low_confidence":
       default:
         await handleHandoffIntent(tenant, senderPhone);

@@ -29,7 +29,8 @@ export async function createOrder(
   tenantId: string,
   customerId: string,
   items: PendingOrderItem[],
-  total: number
+  total: number,
+  notes?: string
 ): Promise<{ orderId: string }> {
   const { data: order, error: orderErr } = await supabaseAdmin
     .from("orders")
@@ -39,6 +40,7 @@ export async function createOrder(
       total_amount:     total,
       status:           "PENDING",
       payment_status:   "UNPAID",
+      notes:            notes ?? null,
     })
     .select("id")
     .single();
@@ -86,6 +88,12 @@ export async function updateOrderMidtrans(
   if (error) throw new Error(`[DB] updateOrderMidtrans: ${error.message}`);
 }
 
+// Hard-delete order — rollback saat updateOrderMidtrans gagal setelah createOrder.
+export async function deleteOrder(orderId: string): Promise<void> {
+  const { error } = await supabaseAdmin.from("orders").delete().eq("id", orderId);
+  if (error) console.error("[DB] deleteOrder:", error.message);
+}
+
 // Update status + payment_status order — dipanggil dari Midtrans webhook callback.
 export async function updateOrderStatus(
   orderId: string,
@@ -109,7 +117,7 @@ export async function getOrderItemsByOrderId(orderId: string): Promise<DbOrderIt
     .select("*")
     .eq("order_id", orderId);
 
-  if (error) console.error("[DB] getOrderItemsByOrderId:", error.message);
+  if (error) throw new Error(`[DB] getOrderItemsByOrderId: ${error.message}`);
   return (data as DbOrderItem[]) ?? [];
 }
 
@@ -128,6 +136,58 @@ export async function getOrderByMidtransId(midtransId: string): Promise<DbOrder 
   return data as DbOrder;
 }
 
+export type ActiveOrderWithItems = {
+  id:           string;
+  midtrans_id:  string | null;
+  status:       DbOrder["status"];
+  total_amount: number;
+  created_at:   string;
+  items: Array<{
+    product_name:   string;
+    qty:            number;
+    unit:           string;
+    price_at_order: number;
+  }>;
+};
+
+// Fetch order terbaru NON-CANCELLED + items — untuk handleStatusIntent.
+export async function getLatestActiveOrderWithItems(
+  tenantId: string,
+  userId:   string
+): Promise<ActiveOrderWithItems | null> {
+  const { data, error } = await supabaseAdmin
+    .from("orders")
+    .select(`
+      id, midtrans_id, status, total_amount, created_at,
+      order_items(qty, price_at_order, unit, products(name))
+    `)
+    .eq("tenant_id", tenantId)
+    .eq("customer_user_id", userId)
+    .not("status", "eq", "CANCELLED")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .single();
+
+  if (error) {
+    if (error.code !== "PGRST116") console.error("[DB] getLatestActiveOrderWithItems:", error.message);
+    return null;
+  }
+
+  return {
+    id:           data.id,
+    midtrans_id:  data.midtrans_id ?? null,
+    status:       data.status as DbOrder["status"],
+    total_amount: data.total_amount,
+    created_at:   data.created_at,
+    items: ((data as any).order_items ?? []).map((oi: any) => ({
+      product_name:   oi.products?.name ?? "",
+      qty:            oi.qty,
+      unit:           oi.unit,
+      price_at_order: oi.price_at_order,
+    })),
+  };
+}
+
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 
 export type OrderWithDetails = {
@@ -138,6 +198,7 @@ export type OrderWithDetails = {
   total_amount: number;
   created_at: string;
   customer_phone: string;
+  customer_name: string;
   items: Array<{
     qty: number;
     price_at_order: number;
@@ -156,7 +217,7 @@ export async function getOrdersByTenant(
     .from("orders")
     .select(`
       id, midtrans_id, status, payment_status, total_amount, created_at,
-      users!orders_customer_user_id_fkey(phone),
+      users!orders_customer_user_id_fkey(phone, name),
       order_items(qty, price_at_order, unit, products(name))
     `)
     .eq("tenant_id", tenantId)
@@ -181,6 +242,7 @@ export async function getOrdersByTenant(
     total_amount:   row.total_amount,
     created_at:     row.created_at,
     customer_phone: row.users?.phone ?? "",
+    customer_name:  row.users?.name ?? "",
     items: ((row.order_items ?? []) as any[]).map((oi: any) => ({
       qty:            oi.qty,
       price_at_order: oi.price_at_order,
@@ -188,4 +250,70 @@ export async function getOrdersByTenant(
       product_name:   oi.products?.name ?? "",
     })),
   }));
+}
+
+export type LastOrderItem = {
+  product_id:   string;
+  product_name: string;
+  qty:          number;
+  unit:         string;
+  size:         string | null;
+  notes:        string | null;
+};
+
+// Fetch order terbaru dengan status tertentu — dipakai owner mark_fulfilled/mark_done.
+export async function getLatestOrderByStatus(
+  tenantId: string,
+  status:   DbOrder["status"]
+): Promise<DbOrder | null> {
+  const { data, error } = await supabaseAdmin
+    .from("orders")
+    .select("*")
+    .eq("tenant_id", tenantId)
+    .eq("status", status)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .single();
+
+  if (error) {
+    if (error.code !== "PGRST116") console.error("[DB] getLatestOrderByStatus:", error.message);
+    return null;
+  }
+  return data as DbOrder;
+}
+
+export async function getLastCompletedOrderWithItems(
+  tenantId: string,
+  userId:   string
+): Promise<{ orderId: string; items: LastOrderItem[] } | null> {
+  const { data: order, error: orderErr } = await supabaseAdmin
+    .from("orders")
+    .select("id")
+    .eq("tenant_id", tenantId)
+    .eq("customer_user_id", userId)
+    .eq("payment_status", "PAID")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .single();
+
+  if (orderErr || !order) return null;
+
+  const { data: items, error: itemsErr } = await supabaseAdmin
+    .from("order_items")
+    .select("product_id, qty, unit, size, notes, products(name)")
+    .eq("order_id", order.id);
+
+  if (itemsErr || !items) return null;
+
+  return {
+    orderId: order.id,
+    items: (items as any[]).map((i) => ({
+      product_id:   i.product_id,
+      product_name: i.products?.name ?? "",
+      qty:          i.qty,
+      unit:         i.unit,
+      size:         i.size ?? null,
+      notes:        i.notes ?? null,
+    })),
+  };
 }

@@ -1,6 +1,7 @@
 export type SessionState =
   | "idle"
   | "awaiting_confirmation"
+  | "awaiting_address"
   | "awaiting_payment"
   | "awaiting_clarification"
   | "awaiting_owner_confirmation";

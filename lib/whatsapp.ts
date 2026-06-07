@@ -28,11 +28,12 @@ export async function sendWhatsAppMessage(
 
   if (!res.ok) {
     const err = await res.text();
-    console.error("[WA] sendWhatsAppMessage failed:", err);
+    console.error(`[WA] sendWhatsAppMessage to=${to} failed:`, err);
     return { success: false, error: err };
   }
 
   const data = await res.json();
+  console.log(`[WA] sendWhatsAppMessage to=${to} success!`)
   return { success: true, message_id: data.messages?.[0]?.id };
 }
 
@@ -74,22 +75,25 @@ export async function sendCatalogMessage(
   return { success: true, message_id: data.messages?.[0]?.id };
 }
 
-// ----------------------------------------
-// Stubs — diimplementasi saat payment flow
-// ----------------------------------------
-
 // Upload media ke Meta — return media_id yang dipakai sendWhatsAppImageMessage.
-export async function uploadWhatsAppMedia(imageBuffer: Buffer): Promise<string> {
-  const form = new FormData();
+// Pakai npm form-data (bukan Web API FormData) agar multipart encoding benar di Node.js.
+export async function uploadWhatsAppMedia(imageBuffer: Buffer, contentType = "image/png"): Promise<string> {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const FormDataNode = require("form-data") as typeof import("form-data");
+  const ext  = contentType.includes("jpeg") || contentType.includes("jpg") ? "qris.jpg" : "qris.png";
+  const form = new FormDataNode();
   form.append("messaging_product", "whatsapp");
-  form.append("file", new Blob([new Uint8Array(imageBuffer)], { type: "image/png" }), "qris.png");
+  form.append("file", imageBuffer, { filename: ext, contentType });
 
   const res = await fetch(
     `https://graph.facebook.com/v19.0/${process.env.META_PHONE_NUMBER_ID}/media`,
     {
       method:  "POST",
-      headers: { Authorization: `Bearer ${process.env.META_ACCESS_TOKEN}` },
-      body:    form,
+      headers: {
+        Authorization: `Bearer ${process.env.META_ACCESS_TOKEN}`,
+        ...form.getHeaders(),
+      },
+      body: form.getBuffer() as unknown as BodyInit,
     }
   );
 
@@ -127,7 +131,7 @@ export async function sendWhatsAppImageMessage(
 
   if (!res.ok) {
     const err = await res.text();
-    console.error("[WA] sendWhatsAppImageMessage failed:", err);
+    console.error(`[WA] sendWhatsAppImageMessage to=${to} failed:`, err);
     return { success: false, error: err };
   }
 

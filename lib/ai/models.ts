@@ -87,6 +87,8 @@ ACTION (pilih tepat satu):
 - activate_product  : aktifkan kembali produk yang sebelumnya dinonaktifkan
 - open_store        : buka toko
 - close_store       : tutup toko
+- mark_fulfilled    : tandai order sudah dikirim / dalam pengiriman (status PAID → FULFILLED), notif customer
+- mark_done         : tandai order sudah selesai / diterima customer (status FULFILLED → DONE), notif customer
 - help              : minta bantuan atau daftar perintah
 - unknown           : perintah tidak jelas atau di luar daftar
 
@@ -106,7 +108,7 @@ ATURAN OUTPUT:
         action: {
           type: SchemaType.STRING,
           format: "enum",
-          enum: ["get_revenue","get_stock","update_price","update_stock","set_reorder_point","deactivate_product","activate_product","open_store","close_store","help","unknown"],
+          enum: ["get_revenue","get_stock","update_price","update_stock","set_reorder_point","deactivate_product","activate_product","open_store","close_store","mark_fulfilled","mark_done","help","unknown"],
         },
         product_index: { type: SchemaType.INTEGER },
         value:         { type: SchemaType.NUMBER },
@@ -142,6 +144,58 @@ ATURAN KONTEN:
   generationConfig: {
     temperature: 0.4,
     maxOutputTokens: 400,
+  },
+  safetySettings,
+});
+
+// Model 4: Confirmation Parser — deteksi konfirmasi/pembatalan dari customer/owner
+export const confirmationParserModel = genAI.getGenerativeModel({
+  model: "gemini-3.1-flash-lite",
+  systemInstruction: `Kamu adalah parser konfirmasi untuk toko WhatsApp.
+Tentukan apakah pesan berarti:
+- confirm  : setuju / ya / lanjut / oke (dalam konteks mengkonfirmasi sesuatu)
+- cancel   : tidak mau / batal / stop / gak jadi
+- ambiguous: tidak jelas, tidak bisa dipastikan
+
+Handle bahasa informal Indonesia: typo, singkatan, campur Inggris-Indonesia, slang (gak, ngga, gas, sip, dll).`,
+  generationConfig: {
+    temperature: 0.1,
+    responseMimeType: "application/json",
+    responseSchema: {
+      type: SchemaType.OBJECT,
+      properties: {
+        signal: {
+          type: SchemaType.STRING,
+          format: "enum",
+          enum: ["confirm", "cancel", "ambiguous"],
+        },
+      },
+      required: ["signal"],
+    },
+  },
+  safetySettings,
+});
+
+// Model 5: Clarification Parser — ekstrak pilihan varian atau jumlah dari jawaban customer
+export const clarificationParserModel = genAI.getGenerativeModel({
+  model: "gemini-3.1-flash-lite",
+  systemInstruction: `Kamu adalah parser jawaban klarifikasi untuk toko WhatsApp.
+Context diberikan dalam prompt: jenis pertanyaan (varian atau jumlah), batasan valid, dan pesan customer.
+- Jika customer memilih atau menyebut angka yang valid → ekstrak ke "choice", "cancel": false
+- Jika customer ingin membatalkan (batal, gak jadi, stop, dll) → "choice": 0, "cancel": true
+- Jika tidak jelas atau tidak valid → "choice": 0, "cancel": false (akan trigger retry)
+Konversi kata ke angka: "dua" → 2, "tiga kilo" → 3, "pertama" → 1, dll.`,
+  generationConfig: {
+    temperature: 0.1,
+    responseMimeType: "application/json",
+    responseSchema: {
+      type: SchemaType.OBJECT,
+      properties: {
+        choice: { type: SchemaType.NUMBER },
+        cancel: { type: SchemaType.BOOLEAN },
+      },
+      required: ["choice", "cancel"],
+    },
   },
   safetySettings,
 });

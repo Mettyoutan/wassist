@@ -1,16 +1,20 @@
-import { supabaseAdmin,
+import { getProductsByTenantAll,
          updateProductPrice,
          updateProductStock,
          setProductReorderPoint,
          setProductActive,
          setStoreStatus,
-         queryRevenueData }           from "@/server/db";
+         queryRevenueData,
+         getLatestOrderByStatus,
+         updateOrderStatus,
+         getUserById }                from "@/server/db";
 import { sendWhatsAppMessage }        from "@/lib/whatsapp";
+import { fulfillmentNotificationMessage,
+         orderDoneNotificationMessage } from "@/lib/response-template";
 import { generateRevenueResponse }    from "@/lib/owner/generator";
 import { parseOwnerCommand }          from "@/lib/owner/parser";
 import { setSession, clearSession }   from "@/lib/session";
-import { CONFIRM_KEYWORDS,
-         CANCEL_KEYWORDS }            from "@/lib/constants/confirmation-keywords";
+import { parseConfirmationIntent }      from "@/lib/ai/confirmation-parser";
 import type { DbTenant }              from "@/lib/types/db";
 import type { Session,
               PendingOwnerAction }    from "@/lib/types/session";
@@ -29,20 +33,18 @@ export async function handleOwnerCommand(
     return;
   }
 
-  // 2. Fetch daftar produk aktif (untuk context parser)
-  const { data: rawProducts } = await supabaseAdmin
-    .from("products")
-    .select("id, name, price, unit, stock, reorder_point")
-    .eq("tenant_id", tenant.id)
-    .eq("is_active", true)
-    .order("name", { ascending: true });
+  // 2. Fetch SEMUA produk (termasuk nonaktif) agar activate_product bisa memilih
+  const products = await getProductsByTenantAll(tenant.id);
 
-  const products = rawProducts ?? [];
-
-  // 3. Parse perintah owner via Gemini
+  // 3. Parse perintah owner via Gemini — produk nonaktif ditandai [nonaktif]
   const parsed = await parseOwnerCommand(
     text,
-    products.map((p) => ({ name: p.name, price: p.price, unit: p.unit, stock: p.stock }))
+    products.map((p) => ({
+      name:  p.is_active ? p.name : `${p.name} [nonaktif]`,
+      price: p.price,
+      unit:  p.unit,
+      stock: p.stock,
+    }))
   );
 
   // 4. Dispatch berdasarkan action
@@ -95,6 +97,38 @@ export async function handleOwnerCommand(
       await setStoreStatus(tenant.id, false);
       await sendWhatsAppMessage(ownerPhone, "🔒 Toko *tutup*. Balas *buka* untuk buka lagi.");
       break;
+
+    case "mark_fulfilled": {
+      const order = await getLatestOrderByStatus(tenant.id, "PAID");
+      if (!order) {
+        await sendWhatsAppMessage(ownerPhone, "Tidak ada order yang menunggu pengiriman saat ini 📭");
+        break;
+      }
+      await updateOrderStatus(order.id, "FULFILLED");
+      const displayId = order.midtrans_id ?? order.id.slice(-6).toUpperCase();
+      const customer = await getUserById(order.customer_user_id);
+      if (customer?.phone) {
+        await sendWhatsAppMessage(customer.phone, fulfillmentNotificationMessage(displayId));
+      }
+      await sendWhatsAppMessage(ownerPhone, `✅ Order *${displayId}* ditandai *dikirim* — customer sudah dinotifikasi 🚚`);
+      break;
+    }
+
+    case "mark_done": {
+      const order = await getLatestOrderByStatus(tenant.id, "FULFILLED");
+      if (!order) {
+        await sendWhatsAppMessage(ownerPhone, "Tidak ada order dalam pengiriman saat ini 📭");
+        break;
+      }
+      await updateOrderStatus(order.id, "DONE");
+      const displayId = order.midtrans_id ?? order.id.slice(-6).toUpperCase();
+      const customer = await getUserById(order.customer_user_id);
+      if (customer?.phone) {
+        await sendWhatsAppMessage(customer.phone, orderDoneNotificationMessage(displayId));
+      }
+      await sendWhatsAppMessage(ownerPhone, `✅ Order *${displayId}* ditandai *selesai* — customer sudah dinotifikasi 🎉`);
+      break;
+    }
 
     // ── MUTASI (wajib konfirmasi) ──────────────────────────────────────────
     case "update_price": {
@@ -206,7 +240,9 @@ export async function handleOwnerCommand(
         `📥 *Update stok*: "stok kaos jadi 20" / "tambah stok kaos 5"\n` +
         `🔔 *Batas stok*: "batas stok kaos 5"\n` +
         `🚫 *Nonaktifkan*: "nonaktifkan kaos oversize"\n` +
-        `🟢 *Toko*: "buka" / "tutup"\n\n` +
+        `🟢 *Toko*: "buka" / "tutup"\n` +
+        `🚚 *Kirim*: "sudah dikirim" / "kirim order"\n` +
+        `✅ *Selesai*: "order selesai" / "sudah diterima"\n\n` +
         `_Nomor produk merujuk ke urutan katalog aktif._`
       );
       break;
@@ -221,16 +257,21 @@ async function handleOwnerConfirmation(
   text:       string,
   session:    Session
 ): Promise<void> {
-  const normalized = text.toLowerCase().trim();
   const action = session.pending_owner_action;
 
-  if (CANCEL_KEYWORDS.has(normalized) || !action) {
+  if (!action) {
     clearSession(tenant.id, ownerPhone);
     await sendWhatsAppMessage(ownerPhone, "Dibatalkan 👍");
     return;
   }
 
-  if (!CONFIRM_KEYWORDS.has(normalized)) {
+  const signal = await parseConfirmationIntent(text);
+  if (signal === "cancel") {
+    clearSession(tenant.id, ownerPhone);
+    await sendWhatsAppMessage(ownerPhone, "Dibatalkan 👍");
+    return;
+  }
+  if (signal !== "confirm") {
     await sendWhatsAppMessage(ownerPhone, "Balas *ya* untuk konfirmasi atau *batal* untuk membatalkan.");
     return;
   }

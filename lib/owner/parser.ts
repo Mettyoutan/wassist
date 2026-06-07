@@ -12,6 +12,8 @@ export const OwnerCommandSchema = z.object({
     "activate_product",
     "open_store",
     "close_store",
+    "mark_fulfilled",
+    "mark_done",
     "help",
     "unknown",
   ]),
