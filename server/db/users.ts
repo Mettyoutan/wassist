@@ -63,7 +63,7 @@ export async function getUserWithAddress(
     if (error.code !== "PGRST116") console.error("[DB] getUserWithAddress:", error.message);
     return null;
   }
-  return data as { id: string; last_address: string | null };
+  return data as unknown as { id: string; last_address: string | null };
 }
 
 export async function updateUserLastAddress(
@@ -72,7 +72,8 @@ export async function updateUserLastAddress(
 ): Promise<void> {
   const { error } = await supabaseAdmin
     .from("users")
-    .update({ last_address: address })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .update({ last_address: address } as any)
     .eq("id", userId);
 
   if (error) console.error("[DB] updateUserLastAddress:", error.message);
