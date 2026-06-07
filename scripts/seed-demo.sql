@@ -102,6 +102,7 @@ RETURNING id INTO v_ahmad;
 
 -- ================================================================
 -- 3. PRODUCTS (id di-generate DB via DEFAULT gen_random_uuid())
+--    meta_retailer_id di-set bulk di akhir = product UUID
 -- LOW STOCK (stock <= reorder_point):
 --   Tunik Batik Modern    : 8 / 10
 --   Rok Mini Denim        : 6 / 10
@@ -109,72 +110,75 @@ RETURNING id INTO v_ahmad;
 -- ================================================================
 
 -- ATASAN
-INSERT INTO products (tenant_id, name, category, price, stock, unit, reorder_point, meta_retailer_id, is_active)
-VALUES (v_tenant, 'Kaos Oversize Polos', 'atasan', 85000, 45, 'pcs', 10, 'kaos-oversize-polos', true)
+INSERT INTO products (tenant_id, name, category, price, stock, unit, reorder_point, is_active)
+VALUES (v_tenant, 'Kaos Oversize Polos', 'atasan', 85000, 45, 'pcs', 10, true)
 RETURNING id INTO v_kaos_oversize;
 
-INSERT INTO products (tenant_id, name, category, price, stock, unit, reorder_point, meta_retailer_id, is_active)
-VALUES (v_tenant, 'Blouse Floral Lengan Panjang', 'atasan', 120000, 28, 'pcs', 10, 'blouse-floral-lengan-panjang', true)
+INSERT INTO products (tenant_id, name, category, price, stock, unit, reorder_point, is_active)
+VALUES (v_tenant, 'Blouse Floral Lengan Panjang', 'atasan', 120000, 28, 'pcs', 10, true)
 RETURNING id INTO v_blouse_floral;
 
-INSERT INTO products (tenant_id, name, category, price, stock, unit, reorder_point, meta_retailer_id, is_active)
-VALUES (v_tenant, 'Kemeja Linen Wanita', 'atasan', 145000, 15, 'pcs', 8, 'kemeja-linen-wanita', true)
+INSERT INTO products (tenant_id, name, category, price, stock, unit, reorder_point, is_active)
+VALUES (v_tenant, 'Kemeja Linen Wanita', 'atasan', 145000, 15, 'pcs', 8, true)
 RETURNING id INTO v_kemeja_linen;
 
-INSERT INTO products (tenant_id, name, category, price, stock, unit, reorder_point, meta_retailer_id, is_active)
-VALUES (v_tenant, 'Crop Top Ribbed', 'atasan', 75000, 32, 'pcs', 10, 'crop-top-ribbed', true)
+INSERT INTO products (tenant_id, name, category, price, stock, unit, reorder_point, is_active)
+VALUES (v_tenant, 'Crop Top Ribbed', 'atasan', 75000, 32, 'pcs', 10, true)
 RETURNING id INTO v_crop_top;
 
-INSERT INTO products (tenant_id, name, category, price, stock, unit, reorder_point, meta_retailer_id, is_active)
-VALUES (v_tenant, 'Tunik Batik Modern', 'atasan', 165000, 8, 'pcs', 10, 'tunik-batik-modern', true)
+INSERT INTO products (tenant_id, name, category, price, stock, unit, reorder_point, is_active)
+VALUES (v_tenant, 'Tunik Batik Modern', 'atasan', 165000, 8, 'pcs', 10, true)
 RETURNING id INTO v_tunik_batik;
 
 -- BAWAHAN
-INSERT INTO products (tenant_id, name, category, price, stock, unit, reorder_point, meta_retailer_id, is_active)
-VALUES (v_tenant, 'Rok Midi Plisket', 'bawahan', 110000, 22, 'pcs', 8, 'rok-midi-plisket', true)
+INSERT INTO products (tenant_id, name, category, price, stock, unit, reorder_point, is_active)
+VALUES (v_tenant, 'Rok Midi Plisket', 'bawahan', 110000, 22, 'pcs', 8, true)
 RETURNING id INTO v_rok_midi;
 
-INSERT INTO products (tenant_id, name, category, price, stock, unit, reorder_point, meta_retailer_id, is_active)
-VALUES (v_tenant, 'Celana Palazzo', 'bawahan', 130000, 19, 'pcs', 8, 'celana-palazzo', true)
+INSERT INTO products (tenant_id, name, category, price, stock, unit, reorder_point, is_active)
+VALUES (v_tenant, 'Celana Palazzo', 'bawahan', 130000, 19, 'pcs', 8, true)
 RETURNING id INTO v_celana_palazzo;
 
-INSERT INTO products (tenant_id, name, category, price, stock, unit, reorder_point, meta_retailer_id, is_active)
-VALUES (v_tenant, 'Rok Mini Denim', 'bawahan', 95000, 6, 'pcs', 10, 'rok-mini-denim', true)
+INSERT INTO products (tenant_id, name, category, price, stock, unit, reorder_point, is_active)
+VALUES (v_tenant, 'Rok Mini Denim', 'bawahan', 95000, 6, 'pcs', 10, true)
 RETURNING id INTO v_rok_mini_denim;
 
-INSERT INTO products (tenant_id, name, category, price, stock, unit, reorder_point, meta_retailer_id, is_active)
-VALUES (v_tenant, 'Celana Kulot Polos', 'bawahan', 105000, 35, 'pcs', 10, 'celana-kulot-polos', true)
+INSERT INTO products (tenant_id, name, category, price, stock, unit, reorder_point, is_active)
+VALUES (v_tenant, 'Celana Kulot Polos', 'bawahan', 105000, 35, 'pcs', 10, true)
 RETURNING id INTO v_celana_kulot;
 
 -- OUTER
-INSERT INTO products (tenant_id, name, category, price, stock, unit, reorder_point, meta_retailer_id, is_active)
-VALUES (v_tenant, 'Cardigan Rajut Pastel', 'outer', 175000, 4, 'pcs', 8, 'cardigan-rajut-pastel', true)
+INSERT INTO products (tenant_id, name, category, price, stock, unit, reorder_point, is_active)
+VALUES (v_tenant, 'Cardigan Rajut Pastel', 'outer', 175000, 4, 'pcs', 8, true)
 RETURNING id INTO v_cardigan_rajut;
 
-INSERT INTO products (tenant_id, name, category, price, stock, unit, reorder_point, meta_retailer_id, is_active)
-VALUES (v_tenant, 'Jaket Denim Basic', 'outer', 215000, 18, 'pcs', 5, 'jaket-denim-basic', true)
+INSERT INTO products (tenant_id, name, category, price, stock, unit, reorder_point, is_active)
+VALUES (v_tenant, 'Jaket Denim Basic', 'outer', 215000, 18, 'pcs', 5, true)
 RETURNING id INTO v_jaket_denim;
 
-INSERT INTO products (tenant_id, name, category, price, stock, unit, reorder_point, meta_retailer_id, is_active)
-VALUES (v_tenant, 'Blazer Casual Wanita', 'outer', 195000, 12, 'pcs', 5, 'blazer-casual-wanita', true)
+INSERT INTO products (tenant_id, name, category, price, stock, unit, reorder_point, is_active)
+VALUES (v_tenant, 'Blazer Casual Wanita', 'outer', 195000, 12, 'pcs', 5, true)
 RETURNING id INTO v_blazer_casual;
 
-INSERT INTO products (tenant_id, name, category, price, stock, unit, reorder_point, meta_retailer_id, is_active)
-VALUES (v_tenant, 'Outer Polos Korean Style', 'outer', 155000, 23, 'pcs', 8, 'outer-polos-korean-style', true)
+INSERT INTO products (tenant_id, name, category, price, stock, unit, reorder_point, is_active)
+VALUES (v_tenant, 'Outer Polos Korean Style', 'outer', 155000, 23, 'pcs', 8, true)
 RETURNING id INTO v_outer_korean;
 
 -- AKSESORIS
-INSERT INTO products (tenant_id, name, category, price, stock, unit, reorder_point, meta_retailer_id, is_active)
-VALUES (v_tenant, 'Tas Tote Kanvas', 'aksesoris', 85000, 40, 'pcs', 15, 'tas-tote-kanvas', true)
+INSERT INTO products (tenant_id, name, category, price, stock, unit, reorder_point, is_active)
+VALUES (v_tenant, 'Tas Tote Kanvas', 'aksesoris', 85000, 40, 'pcs', 15, true)
 RETURNING id INTO v_tas_tote;
 
-INSERT INTO products (tenant_id, name, category, price, stock, unit, reorder_point, meta_retailer_id, is_active)
-VALUES (v_tenant, 'Kalung Rantai Minimalis', 'aksesoris', 55000, 65, 'pcs', 20, 'kalung-rantai-minimalis', true)
+INSERT INTO products (tenant_id, name, category, price, stock, unit, reorder_point, is_active)
+VALUES (v_tenant, 'Kalung Rantai Minimalis', 'aksesoris', 55000, 65, 'pcs', 20, true)
 RETURNING id INTO v_kalung_rantai;
 
-INSERT INTO products (tenant_id, name, category, price, stock, unit, reorder_point, meta_retailer_id, is_active)
-VALUES (v_tenant, 'Scrunchie Set Satin (isi 3)', 'aksesoris', 35000, 88, 'pcs', 30, 'scrunchie-set-satin', true)
+INSERT INTO products (tenant_id, name, category, price, stock, unit, reorder_point, is_active)
+VALUES (v_tenant, 'Scrunchie Set Satin (isi 3)', 'aksesoris', 35000, 88, 'pcs', 30, true)
 RETURNING id INTO v_scrunchie_set;
+
+-- meta_retailer_id = product UUID — dipakai WA Catalog integration (lookup via getProductByRetailerId)
+UPDATE products SET meta_retailer_id = id::text WHERE tenant_id = v_tenant;
 
 
 -- ================================================================
@@ -289,3 +293,6 @@ END $$;
 --   WHERE tenant_id = '3b0a38de-811c-40b5-af83-c866e198da12'
 --     AND payment_status = 'PAID'
 --     AND created_at >= CURRENT_DATE;                                                        -- 1065000
+-- SELECT id, name, meta_retailer_id FROM products
+--   WHERE tenant_id = '3b0a38de-811c-40b5-af83-c866e198da12'
+--   ORDER BY name;                                                                           -- 16 rows, meta_retailer_id = id

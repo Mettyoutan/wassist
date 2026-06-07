@@ -173,6 +173,14 @@ export async function createProduct(
     console.error("[DB] createProduct error:", error.message);
     return null;
   }
+
+  // Set meta_retailer_id = product UUID so WA Catalog integration works without extra config.
+  const { error: updateErr } = await supabaseAdmin
+    .from("products")
+    .update({ meta_retailer_id: data.id })
+    .eq("id", data.id);
+  if (updateErr) console.error("[DB] createProduct meta_retailer_id:", updateErr.message);
+
   return data;
 }
 
