@@ -31,10 +31,10 @@ export async function setStoreStatus(tenantId: string, isOpen: boolean): Promise
 
 export async function getTenantById(
   tenantId: string
-): Promise<{ name: string; owner_phone: string } | null> {
+): Promise<{ name: string; owner_phone: string; category: string } | null> {
   const { data, error } = await supabaseAdmin
     .from("tenants")
-    .select("name, owner_phone")
+    .select("name, owner_phone, category")
     .eq("id", tenantId)
     .single();
   if (error) {
