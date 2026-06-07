@@ -91,7 +91,9 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Upsert customer ──────────────────────────────────────────────────────
-    await upsertCustomer(tenant.id, senderPhone);
+    if (tenant.owner_phone !== senderPhone) {
+      await upsertCustomer(tenant.id, senderPhone);
+    }
 
     // ── Cart order dari WA Catalog (tidak butuh state check atau Gemini) ─────
     if (message.type === "order") {
@@ -113,7 +115,7 @@ export async function POST(request: NextRequest) {
     const { wasActive } = peekExpiredSession(tenant.id, senderPhone);
     if (wasActive) {
       await sendWhatsAppMessage(senderPhone, sessionExpiredMessage());
-      // Do NOT return here — let flow continue with fresh getSession below
+      return NextResponse.json({ status: "ok" });
     }
 
     // Get current session
@@ -197,7 +199,13 @@ export async function POST(request: NextRequest) {
           finalAddress = typed;
         }
       } else {
-        // No saved address — plain text input
+        // No saved address — parse cancel first, then accept plain text as address
+        const addrCancel = await parseConfirmationIntent(msgText);
+        if (addrCancel === "cancel") {
+          clearSession(tenant.id, senderPhone);
+          await sendWhatsAppMessage(senderPhone, orderCancelledMessage());
+          return NextResponse.json({ status: "ok" });
+        }
         const typed = msgText.trim();
         if (!typed) {
           await sendWhatsAppMessage(senderPhone, addressRequestMessage());

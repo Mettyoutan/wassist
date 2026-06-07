@@ -15,7 +15,13 @@ import { sendWhatsAppMessage }        from "@/lib/whatsapp";
 import { fulfillmentNotificationMessage,
          orderDoneNotificationMessage,
          ownerMarkPaidMessage,
-         paymentSuccessMessage }         from "@/lib/response-template";
+         paymentSuccessMessage,
+         ownerStoreOpenedMessage,
+         ownerStoreClosedConfirmMessage,
+         ownerNoActiveOrdersMessage,
+         ownerNoOrderForFulfillMessage,
+         ownerNoOrderForDoneMessage,
+         ownerNoOrderForPaidMessage }    from "@/lib/response-template";
 import { generateRevenueResponse }    from "@/lib/owner/generator";
 import { parseOwnerCommand }          from "@/lib/owner/parser";
 import { setSession, clearSession }   from "@/lib/session";
@@ -66,7 +72,7 @@ export async function handleOwnerCommand(
     case "get_orders": {
       const orders = await getActiveOrdersForOwner(tenant.id);
       if (orders.length === 0) {
-        await sendWhatsAppMessage(ownerPhone, "Tidak ada order aktif saat ini 📭");
+        await sendWhatsAppMessage(ownerPhone, ownerNoActiveOrdersMessage());
         break;
       }
       const statusLabel: Record<string, string> = {
@@ -120,18 +126,18 @@ export async function handleOwnerCommand(
     // ── LOW RISK (langsung tanpa konfirmasi) ───────────────────────────────
     case "open_store":
       await setStoreStatus(tenant.id, true);
-      await sendWhatsAppMessage(ownerPhone, "✅ Toko sekarang *buka*!");
+      await sendWhatsAppMessage(ownerPhone, ownerStoreOpenedMessage());
       break;
 
     case "close_store":
       await setStoreStatus(tenant.id, false);
-      await sendWhatsAppMessage(ownerPhone, "🔒 Toko *tutup*. Balas *buka* untuk buka lagi.");
+      await sendWhatsAppMessage(ownerPhone, ownerStoreClosedConfirmMessage());
       break;
 
     case "mark_fulfilled": {
       const order = await getLatestOrderByStatus(tenant.id, "PAID");
       if (!order) {
-        await sendWhatsAppMessage(ownerPhone, "Tidak ada order yang menunggu pengiriman saat ini 📭");
+        await sendWhatsAppMessage(ownerPhone, ownerNoOrderForFulfillMessage());
         break;
       }
       await updateOrderStatus(order.id, "FULFILLED");
@@ -147,7 +153,7 @@ export async function handleOwnerCommand(
     case "mark_done": {
       const order = await getLatestOrderByStatus(tenant.id, "FULFILLED");
       if (!order) {
-        await sendWhatsAppMessage(ownerPhone, "Tidak ada order dalam pengiriman saat ini 📭");
+        await sendWhatsAppMessage(ownerPhone, ownerNoOrderForDoneMessage());
         break;
       }
       await updateOrderStatus(order.id, "DONE");
@@ -163,7 +169,7 @@ export async function handleOwnerCommand(
     case "mark_paid": {
       const order = await getLatestOrderByStatus(tenant.id, "AWAITING_PAYMENT");
       if (!order) {
-        await sendWhatsAppMessage(ownerPhone, "Tidak ada order yang menunggu pembayaran saat ini 📭");
+        await sendWhatsAppMessage(ownerPhone, ownerNoOrderForPaidMessage());
         break;
       }
       try {
@@ -179,6 +185,7 @@ export async function handleOwnerCommand(
         const customer = await getUserById(order.customer_user_id);
         if (customer?.phone) {
           await sendWhatsAppMessage(customer.phone, paymentSuccessMessage(displayId));
+          clearSession(tenant.id, customer.phone);
         }
         await sendWhatsAppMessage(ownerPhone, ownerMarkPaidMessage(displayId));
       } catch (err) {

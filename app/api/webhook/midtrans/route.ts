@@ -10,7 +10,8 @@ import {
 }                                              from "@/server/db";
 import { verifyMidtransSignature }             from "@/lib/midtrans";
 import { sendWhatsAppMessage }                 from "@/lib/whatsapp";
-import { paymentSuccessMessage, lowStockAlertMessage }               from "@/lib/response-template";
+import { clearSession }                        from "@/lib/session";
+import { paymentSuccessMessage, lowStockAlertMessage, orderExpiredMessage, ownerPaymentReceivedMessage } from "@/lib/response-template";
 
 export async function POST(request: NextRequest) {
   try {
@@ -101,6 +102,8 @@ export async function POST(request: NextRequest) {
         );
         if (!r.success) console.error("[Midtrans] WA to customer failed:", customer.phone, r.error);
         else console.log("[Midtrans] WA customer notified:", customer.phone);
+        // Clear awaiting_payment session — prevents customer from cancelling a PAID order
+        clearSession(order.tenant_id, customer.phone);
       }
 
       // Notif owner
@@ -109,7 +112,7 @@ export async function POST(request: NextRequest) {
       } else {
         const r = await sendWhatsAppMessage(
           tenant.owner_phone,
-          `💰 *Pembayaran masuk!*\nOrder: ${orderId}\nTotal: *Rp${order.total_amount.toLocaleString("id-ID")}*`
+          ownerPaymentReceivedMessage(orderId, order.total_amount)
         );
         if (!r.success) console.error("[Midtrans] WA to owner failed:", tenant.owner_phone, r.error);
         else console.log("[Midtrans] WA owner notified:", tenant.owner_phone);
@@ -121,6 +124,13 @@ export async function POST(request: NextRequest) {
       try {
         await updateOrderStatus(order.id, "CANCELLED");
         console.log("[Midtrans] order cancelled/expired:", order_id);
+        const expiredCustomer = await getUserById(order.customer_user_id);
+        if (expiredCustomer?.phone) {
+          clearSession(order.tenant_id, expiredCustomer.phone);
+          sendWhatsAppMessage(expiredCustomer.phone, orderExpiredMessage()).catch(
+            (err) => console.error("[midtrans/webhook] expired notify failed:", err)
+          );
+        }
       } catch (e) {
         console.error("[Midtrans] failed to cancel order:", order_id, e);
         // Tetap 200 — Midtrans tidak boleh retry terus; order perlu manual fix
