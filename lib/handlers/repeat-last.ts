@@ -34,8 +34,9 @@ export async function handleRepeatLastIntent(
     return;
   }
 
-  const resolvedItems: PendingOrderItem[] = [];
-  const unavailableNames: string[]         = [];
+  const resolvedItems: PendingOrderItem[]  = [];
+  const unavailableNames: string[]          = [];
+  const adjustedItemNotes: string[]         = [];
 
   for (const item of lastOrder.items) {
     const product = await getProductByName(tenant.id, item.product_name);
@@ -45,6 +46,9 @@ export async function handleRepeatLastIntent(
     }
 
     const qty = Math.min(item.qty, product.stock);
+    if (qty < item.qty) {
+      adjustedItemNotes.push(`${item.product_name} (${qty} dari ${item.qty} ${product.unit})`);
+    }
     resolvedItems.push({
       product_id: product.id,
       name:       item.product_name,
@@ -66,7 +70,12 @@ export async function handleRepeatLastIntent(
 
   await sendWhatsAppMessage(
     senderPhone,
-    orderConfirmationMessage(resolvedItems, total, unavailableNames.length > 0 ? unavailableNames : undefined)
+    orderConfirmationMessage(
+      resolvedItems,
+      total,
+      unavailableNames.length > 0 ? unavailableNames : undefined,
+      adjustedItemNotes.length > 0 ? adjustedItemNotes : undefined,
+    )
   );
 
   setSession(tenant.id, senderPhone, {

@@ -189,6 +189,8 @@ export async function handleOrderIntent(
             resolved:     resolvedItems.slice(),
             retry_count:  0,
           };
+        } else {
+          notFoundNames.push(result.candidate.name);
         }
         break;
 
@@ -203,6 +205,8 @@ export async function handleOrderIntent(
             resolved:     resolvedItems.slice(),
             retry_count:  0,
           };
+        } else {
+          notFoundNames.push(result.candidate.name);
         }
         break;
 
