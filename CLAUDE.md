@@ -587,83 +587,12 @@ const product = await getProductByRetailerId(tenant.id, cartItem.product_retaile
 
 ---
 
-## Remaining Items (per 7 Juni 2026)
+## Remaining Items (per 9 Juni 2026)
 
 ### Critical — demo blocker
-- [ ] Cloud Run deploy + update Meta Developer Console webhook URL
-- [ ] End-to-end test bot dari WA real device setelah deploy
 - [ ] Jalankan `scripts/delete-demo.sql` + `scripts/seed-demo.sql` di Supabase sebelum demo
-
-### Fitur Baru (per 8 Juni 2026 sesi 1) ✅
-- ✅ Multi-select clarification: customer bisa pilih beberapa varian sekaligus (`"kulot dan palazzo masing-masing 1"`)
-- ✅ Natural language clarification: customer bisa sebut nama produk bukan hanya angka
-- ✅ Dropped items feedback: item stok habis di multi-select → customer dapat notif nama produk yang dilewati
-- ✅ Quantity mode fix: `choices[0].qty` tidak fallback ke `index` (silent wrong-qty bug)
-- ✅ `clarificationOutOfStockMessage()` template baru di `lib/response-template.ts`
-- ✅ `get_orders` owner command (15th action) — `getActiveOrdersForOwner()` DB function
-- ✅ `parsePaymentStateIntent()` — fungsi terpisah untuk state `awaiting_payment` (bukan reuse confirmationParser)
-- ✅ `confirmationPendingMessage()` tampil ringkasan order (items + total)
-- ✅ `awaitingPaymentReminderMessage()` tampil order ID + total (fetch dari DB)
-- ✅ `cancel_order` intent actually cancels AWAITING_PAYMENT order (bukan hanya info)
-- ✅ Browse hardcoded "Olshop Kak Nina" → `${tenant.name}` dynamic
-- ✅ Multi-item order loss bug fix: `resolvedItems` (post-loop) bukan `clarification.resolved` snapshot
-- ✅ Owner confirmation bleeding fix: `parseConfirmationIntent(text, "owner")` — context param
-- ✅ `handoffCustomerMessage()` + `handoffOwnerAlertMessage()` templates (move hardcode dari handoff.ts)
-- ✅ `modifyOrderInConfirmationMessage()` + `modifyOrderHandoffMessage()` templates
-
-### Fitur Baru (per 7 Juni 2026 sesi 2) ✅
-- ✅ `confirmationParser` fix: pesan dengan nama produk/kata "tambah" → selalu `ambiguous` (bukan `confirm`)
-- ✅ Saved address: `users.last_address` column + `getUserWithAddress` + `updateUserLastAddress`
-- ✅ Session field `pending_saved_address?: string` → clear saat transisi ke `awaiting_payment`
-- ✅ `addressConfirmMessage(savedAddress)` template (include opsi *batal*)
-- ✅ `awaiting_address` handler: returning customer → konfirmasi saved address; first-time → minta baru
-- ✅ Address persisted fire-and-forget; skip write jika tidak berubah
-
-### Bug Fixes (per 8 Juni 2026 sesi 2) ✅
-- ✅ `awaiting_address` first-time customer cancel path — `parseConfirmationIntent` di else branch sebelum terima teks sebagai alamat
-- ✅ `mark_paid` + Midtrans PAID callback: `clearSession(tenant.id, customer.phone)` setelah notif customer → cegah cancel PAID order
-- ✅ `peekExpiredSession`: `return` setelah `sessionExpiredMessage` → cegah double response
-- ✅ `upsertCustomer` skip untuk `tenant.owner_phone === senderPhone` → cegah role OWNER jadi CUSTOMER di DB
-- ✅ Midtrans expire/cancel: `clearSession` + kirim `orderExpiredMessage()` ke customer
-- ✅ `storeClosedMessage`: format ISO timestamp ke bahasa Indonesia via `toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })`
-- ✅ `repeat_last` qty truncation: track `adjustedItemNotes` → tampil via `orderConfirmationMessage` param ke-4
-- ✅ `missing_qty`/`invalid_qty` else branch di `order-new.ts`: item ke-2+ masuk `notFoundNames` bukan silent drop
-- ✅ Hardcoded WA strings di `owner.ts` + `midtrans/route.ts` → extract ke `response-template.ts`
-
-### Bug & Architecture — SELESAI ✅
-- ✅ Architecture violations: inline `supabaseAdmin` di routes/handlers → extract ke `server/db/`
-- ✅ `activate_product` bug: fetch all products incl. inactive
-- ✅ `processOrderConfirmation` try-catch
-- ✅ Partial stock decrement per-item catch
-- ✅ `repeat_last` intent: full handler + DB function
-- ✅ `cancel_order` intent: dedicated template
-- ✅ Midtrans sandbox key wrong → fix `.env.local` dengan key dari dashboard.sandbox.midtrans.com
-- ✅ Orphan order jika Midtrans fail → reorder: `createQrisPayment` sebelum `createOrder`
-- ✅ `qrSent = true` unconditional → cek `result.success` dari `sendWhatsAppImageMessage`
-- ✅ Midtrans QR image URL butuh auth → tambah `Authorization: Basic` header di fetch
-- ✅ `uploadWhatsAppMedia` pakai Web API FormData → ganti npm `form-data` package
-- ✅ `paymentLinkMessage` leading whitespace + empty URL → fix template literal + guard URL kosong
-- ✅ `awaiting_confirmation` fallback message → `confirmationPendingMessage()` template
-- ✅ Keyword matching (CONFIRM/CANCEL_KEYWORDS, extractNumber) → replaced dengan AI (`parseConfirmationIntent`, `parseClarificationInput`)
-- ✅ Memory leak: `cleanupExpiredSessions()` tidak pernah dipanggil → counter-based cleanup setiap 50 request
-- ✅ Orphan order rollback: `deleteOrder()` saat `updateOrderMidtrans` gagal setelah `createOrder`
-- ✅ Session ordering: `setSession(awaiting_payment)` dipindah sebelum notif owner (fire-and-forget)
-- ✅ `handleStatusIntent`: tampil items + total, skip CANCELLED
-- ✅ Shipping address slot-filling: `awaiting_address` state, store di `orders.notes`
-- ✅ `mark_paid` owner command: manual payment confirmation + stock decrement
-- ✅ Low-stock WA alert setelah Midtrans PAID callback
-- ✅ QR resend: customer `awaiting_payment` bisa minta kirim ulang QR
-- ✅ Session expiry UX: `peekExpiredSession` + `sessionExpiredMessage`
-- ✅ Concurrent order guard: blokir `order_new` jika ada AWAITING_PAYMENT
-- ✅ `deleteOrder` cascade items dulu (fix FK violation)
-- ✅ Extract hardcoded cancel strings ke `orderCancelledMessage()` template
-
-### Dashboard UI — SELESAI ✅
-- ✅ Bottom navigation bar + dynamic navbar title
-- ✅ `design.md` + `globals.css` fix
-- ✅ `StatusBadge` color fix, `KPICard` bg fix
-- ✅ Stub pages: `/dashboard/settings`, `/dashboard/account`
-- ✅ `/dashboard/orders` error state + retry button
+- [ ] Update Meta webhook URL ke ngrok URL terbaru (`ngrok http 3000` → copy URL → paste di Meta Developer Console)
+- [ ] End-to-end test bot dari WA real device via ngrok
 
 ### Nice-to-have
 - [ ] Toast notifications untuk aksi (finish order)
