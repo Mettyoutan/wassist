@@ -219,3 +219,55 @@ export function ownerNewOrderMessage(
     `Order ID: ${midtransId}`
   );
 }
+
+export function ownerMarkPaidMessage(displayId: string): string {
+  return `✅ Order *${displayId}* ditandai *lunas* — customer sudah dinotifikasi 💰`;
+}
+
+export function lowStockAlertMessage(
+  items: Array<{ name: string; stock: number; unit: string; reorder_point: number }>
+): string {
+  const lines = items.map(
+    (i) => `• ${i.name}: sisa *${i.stock} ${i.unit}* (reorder point: ${i.reorder_point})`
+  );
+  return (
+    `⚠️ *Stok menipis!*\n\n` +
+    lines.join("\n") +
+    `\n\nSegera restok ya kak 🙏`
+  );
+}
+
+export function qrResendFailedMessage(midtransId: string): string {
+  return (
+    `Maaf kak, gagal kirim ulang QR 😔\n\n` +
+    `Order ID kamu: *${midtransId}*\n` +
+    `Silakan screenshot pesan ini dan hubungi kami untuk konfirmasi pembayaran.`
+  );
+}
+
+export function sessionExpiredMessage(): string {
+  return (
+    `Sesi kamu sudah berakhir karena tidak ada aktivitas selama 30 menit 😊\n\n` +
+    `Ketik *menu* untuk mulai lagi ya kak!`
+  );
+}
+
+export function pendingPaymentReminderMessage(displayId: string): string {
+  return (
+    `Kak, kamu masih punya pesanan yang belum dibayar 💳\n\n` +
+    `Order ID: *${displayId}*\n\n` +
+    `Selesaikan pembayaran dulu ya kak, atau ketik *batal* untuk membatalkan pesanan yang ada.`
+  );
+}
+
+export function orderCancelledMessage(): string {
+  return "Pesanan dibatalkan ya kak 👍 Ketik *menu* kalau mau lihat katalog lagi.";
+}
+
+export function addressConfirmMessage(savedAddress: string): string {
+  return (
+    `📦 Kirim ke alamat ini ya kak?\n\n` +
+    `*${savedAddress}*\n\n` +
+    `Balas *ya* untuk konfirmasi, atau ketik alamat baru 😊`
+  );
+}
