@@ -619,6 +619,17 @@ const product = await getProductByRetailerId(tenant.id, cartItem.product_retaile
 - ✅ `awaiting_address` handler: returning customer → konfirmasi saved address; first-time → minta baru
 - ✅ Address persisted fire-and-forget; skip write jika tidak berubah
 
+### Bug Fixes (per 8 Juni 2026 sesi 2) ✅
+- ✅ `awaiting_address` first-time customer cancel path — `parseConfirmationIntent` di else branch sebelum terima teks sebagai alamat
+- ✅ `mark_paid` + Midtrans PAID callback: `clearSession(tenant.id, customer.phone)` setelah notif customer → cegah cancel PAID order
+- ✅ `peekExpiredSession`: `return` setelah `sessionExpiredMessage` → cegah double response
+- ✅ `upsertCustomer` skip untuk `tenant.owner_phone === senderPhone` → cegah role OWNER jadi CUSTOMER di DB
+- ✅ Midtrans expire/cancel: `clearSession` + kirim `orderExpiredMessage()` ke customer
+- ✅ `storeClosedMessage`: format ISO timestamp ke bahasa Indonesia via `toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })`
+- ✅ `repeat_last` qty truncation: track `adjustedItemNotes` → tampil via `orderConfirmationMessage` param ke-4
+- ✅ `missing_qty`/`invalid_qty` else branch di `order-new.ts`: item ke-2+ masuk `notFoundNames` bukan silent drop
+- ✅ Hardcoded WA strings di `owner.ts` + `midtrans/route.ts` → extract ke `response-template.ts`
+
 ### Bug & Architecture — SELESAI ✅
 - ✅ Architecture violations: inline `supabaseAdmin` di routes/handlers → extract ke `server/db/`
 - ✅ `activate_product` bug: fetch all products incl. inactive
@@ -800,6 +811,11 @@ Wajib tambah **handler file** di `lib/handlers/` (satu file per intent besar).
 ❌ parseConfirmationIntent(text) untuk owner confirm → WAJIB pass context "owner": parseConfirmationIntent(text, "owner"); tanpa context, PENTING rule (product name → ambiguous) bleeding ke owner flow
 ❌ Owner Command count "11 action" atau "14 action" → sudah 15 action (tambah get_orders)
 ❌ `getActiveOrdersForOwner` import langsung dari server/db/orders.ts → import dari @/server/db (via index.ts)
+❌ `await upsertCustomer(tenant.id, senderPhone)` tanpa cek owner → gunakan `if (tenant.owner_phone !== senderPhone)` wrapper
+❌ `peekExpiredSession` tanpa `return` setelah send expired message → customer dapat double response
+❌ `clearSession` tidak dipanggil setelah order PAID (`mark_paid` + Midtrans callback) → customer bisa cancel PAID order
+❌ `Math.min(item.qty, stock)` di repeat_last tanpa notif → pakai `adjustedItemNotes` + kirim via `orderConfirmationMessage` param ke-4
+❌ `case "missing_qty"` tanpa else branch → item ke-2+ silently dropped; pakai `notFoundNames.push(result.candidate.name)` di else
 ```
 
 ### Prinsip Natural Language — NO KEYWORD MATCHING

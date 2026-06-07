@@ -33,6 +33,15 @@
 - [x] Saved address: `users.last_address` + confirm/new flow untuk returning customer ✅ 2026-06-07
 - [x] Fix: `confirmationParser` ambiguous untuk pesan dengan nama produk ✅ 2026-06-07
 - [x] Fix: owner confirmation bleeding — `parseConfirmationIntent(text, "owner")` context param ✅ 2026-06-08
+- [x] Fix: `awaiting_address` first-time cancel path — `parseConfirmationIntent` sebelum terima teks ✅ 2026-06-08
+- [x] Fix: `clearSession` setelah PAID (`mark_paid` + Midtrans callback) — cegah cancel PAID order ✅ 2026-06-08
+- [x] Fix: `peekExpiredSession` + `return` → cegah double response ✅ 2026-06-08
+- [x] Fix: `upsertCustomer` skip untuk owner — cegah overwrite role OWNER ke CUSTOMER ✅ 2026-06-08
+- [x] Fix: Midtrans expire → `clearSession` + `orderExpiredMessage` ke customer ✅ 2026-06-08
+- [x] Fix: `storeClosedMessage` — format ISO timestamp ke bahasa Indonesia ✅ 2026-06-08
+- [x] Fix: `repeat_last` qty truncation → notify customer via `adjustedItemNotes` ✅ 2026-06-08
+- [x] Fix: `missing_qty`/`invalid_qty` else branch → item ke-2+ masuk `notFoundNames` ✅ 2026-06-08
+- [x] Fix: Hardcoded WA strings di `owner.ts` + `midtrans/route.ts` → extract ke `response-template.ts` ✅ 2026-06-08
 - [x] Fix: multi-item order loss — `resolvedItems` (post-loop) bukan `clarification.resolved` snapshot ✅ 2026-06-08
 - [x] Fix: browse hardcoded "Olshop Kak Nina" → `${tenant.name}` ✅ 2026-06-08
 - [x] Fix: `confirmationPendingMessage` tampil ringkasan order (items + total) ✅ 2026-06-08
