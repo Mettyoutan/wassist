@@ -246,7 +246,9 @@ export async function POST(request: NextRequest) {
 
       if (paymentSignal === "resend_qr" && session.current_order_id) {
         const order = await getOrderById(session.current_order_id);
-        if (order?.midtrans_id) {
+        if (!order?.midtrans_id) {
+          console.warn("[webhook/awaiting_payment] resend_qr: order has no midtrans_id", session.current_order_id);
+        } else {
           const qrString = await getMidtransQrString(order.midtrans_id);
           if (qrString) {
             try {
@@ -263,8 +265,9 @@ export async function POST(request: NextRequest) {
             } catch (err) {
               console.warn("[webhook/awaiting_payment] QR resend failed:", err);
             }
-            await sendWhatsAppMessage(senderPhone, qrResendFailedMessage(order.midtrans_id));
           }
+          // qrString null OR image send failed → always send fallback with order ID
+          await sendWhatsAppMessage(senderPhone, qrResendFailedMessage(order.midtrans_id));
           return NextResponse.json({ status: "ok" });
         }
       }
