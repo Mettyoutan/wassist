@@ -1,3 +1,4 @@
+import { meta } from "zod/v4/core";
 import { supabaseAdmin } from "./client";
 import type { DbProduct } from "@/lib/types/db";
 
@@ -150,7 +151,8 @@ export async function createProduct(
   reorderPoint: number,
   imageUrl?: string,
   category?: string,
-  description?: string
+  description?: string,
+  metaRetailerId?: string
 ): Promise<{ id: string } | null> {
   const { data, error } = await supabaseAdmin
     .from("products")
@@ -164,6 +166,7 @@ export async function createProduct(
       image_url: imageUrl || null,
       category: category || null,
       description: description || null,
+      meta_retailer_id: metaRetailerId || null,
       is_active: true
     })
     .select("id")

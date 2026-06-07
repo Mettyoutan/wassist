@@ -101,6 +101,11 @@ export default function StockManagement() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const meta_retailer_id = formData.name
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '-')
     
     const payload = {
       name: formData.name,
@@ -111,6 +116,7 @@ export default function StockManagement() {
       image_url: formData.image_url,
       category: formData.category,
       description: formData.description,
+      meta_retailer_id: meta_retailer_id,
     };
 
     try {
@@ -385,6 +391,30 @@ export default function StockManagement() {
                     required
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    style={{ fontSize: "12px", borderRadius: "8px" }}
+                  />
+                </div>
+
+                <div>
+                  <label className="form-label text-muted mb-1" style={{ fontSize: "10px" }}>Deskripsi Produk *</label>
+                  <input 
+                    type="text" 
+                    className="form-control form-control-sm"
+                    required
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    style={{ fontSize: "12px", borderRadius: "8px" }}
+                  />
+                </div>
+
+                <div>
+                  <label className="form-label text-muted mb-1" style={{ fontSize: "10px" }}>Kategori Produk *</label>
+                  <input 
+                    type="text" 
+                    className="form-control form-control-sm"
+                    required
+                    value={formData.category}
+                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                     style={{ fontSize: "12px", borderRadius: "8px" }}
                   />
                 </div>

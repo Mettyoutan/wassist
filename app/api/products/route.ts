@@ -54,7 +54,8 @@ export async function POST(request: Request) {
       Number(body.reorder_point || 5),
       body.image_url || "",
       body.category || "",
-      body.description || ""
+      body.description || "",
+      body.meta_retailer_id || ""
     );
 
     if (!result) {
