@@ -319,6 +319,39 @@ export async function getLastCompletedOrderWithItems(
   };
 }
 
+export type ActiveOrderSummary = {
+  midtrans_id:    string | null;
+  status:         DbOrder["status"];
+  total_amount:   number;
+  customer_phone: string;
+};
+
+// Fetch order aktif untuk owner WA command — status non-terminal, terbaru 10.
+export async function getActiveOrdersForOwner(tenantId: string): Promise<ActiveOrderSummary[]> {
+  const { data, error } = await supabaseAdmin
+    .from("orders")
+    .select(`
+      midtrans_id, status, total_amount,
+      users!orders_customer_user_id_fkey(phone)
+    `)
+    .eq("tenant_id", tenantId)
+    .in("status", ["PENDING", "AWAITING_PAYMENT", "PAID", "FULFILLED"])
+    .order("created_at", { ascending: false })
+    .limit(10);
+
+  if (error) {
+    console.error("[DB] getActiveOrdersForOwner:", error.message);
+    return [];
+  }
+
+  return ((data ?? []) as any[]).map((row) => ({
+    midtrans_id:    row.midtrans_id ?? null,
+    status:         row.status as DbOrder["status"],
+    total_amount:   row.total_amount,
+    customer_phone: (row.users as any)?.phone ?? "",
+  }));
+}
+
 export async function getOrderById(orderId: string): Promise<DbOrder | null> {
   const { data, error } = await supabaseAdmin
     .from("orders")

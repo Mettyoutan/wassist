@@ -6,6 +6,7 @@ import { getProductsByTenantAll,
          setStoreStatus,
          queryRevenueData,
          getLatestOrderByStatus,
+         getActiveOrdersForOwner,
          updateOrderStatus,
          getUserById,
          getOrderItemsByOrderId,
@@ -59,6 +60,31 @@ export async function handleOwnerCommand(
       const data = await queryRevenueData(tenant.id, parsed.period ?? "hari ini");
       const msg  = await generateRevenueResponse(data);
       await sendWhatsAppMessage(ownerPhone, msg);
+      break;
+    }
+
+    case "get_orders": {
+      const orders = await getActiveOrdersForOwner(tenant.id);
+      if (orders.length === 0) {
+        await sendWhatsAppMessage(ownerPhone, "Tidak ada order aktif saat ini 📭");
+        break;
+      }
+      const statusLabel: Record<string, string> = {
+        PENDING:          "🕐 Menunggu konfirmasi",
+        AWAITING_PAYMENT: "💳 Menunggu bayar",
+        PAID:             "✅ Lunas — siap kirim",
+        FULFILLED:        "🚚 Sedang dikirim",
+      };
+      const lines = orders.map((o, i) => {
+        const id    = o.midtrans_id ?? `Order-${i + 1}`;
+        const label = statusLabel[o.status] ?? o.status;
+        const total = `Rp${o.total_amount.toLocaleString("id-ID")}`;
+        return `${i + 1}. *${id}*\n   ${label} — ${total}\n   ${o.customer_phone}`;
+      });
+      await sendWhatsAppMessage(
+        ownerPhone,
+        `📋 *Order Aktif (${orders.length})*\n\n${lines.join("\n\n")}`
+      );
       break;
     }
 
@@ -267,6 +293,7 @@ export async function handleOwnerCommand(
         ownerPhone,
         `👋 *Owner Command WAssist*\n\n` +
         `📊 *Laporan*: "omzet hari ini" / "omzet minggu ini"\n` +
+        `📋 *Order aktif*: "ada order apa?" / "order pending"\n` +
         `📦 *Stok*: "cek stok" / "stok kaos oversize"\n` +
         `✏️ *Ubah harga*: "harga kaos jadi 90000"\n` +
         `📥 *Update stok*: "stok kaos jadi 20" / "tambah stok kaos 5"\n` +

@@ -79,6 +79,7 @@ export const ownerParserModel = genAI.getGenerativeModel({
 
 ACTION (pilih tepat satu):
 - get_revenue       : tanya omzet / laporan penjualan
+- get_orders        : tampilkan daftar order aktif / order yang masih berjalan
 - get_stock         : cek stok produk
 - update_price      : ubah harga produk
 - update_stock      : ubah jumlah stok produk
@@ -109,7 +110,7 @@ ATURAN OUTPUT:
         action: {
           type: SchemaType.STRING,
           format: "enum",
-          enum: ["get_revenue","get_stock","update_price","update_stock","set_reorder_point","deactivate_product","activate_product","open_store","close_store","mark_fulfilled","mark_done","mark_paid","help","unknown"],
+          enum: ["get_revenue","get_orders","get_stock","update_price","update_stock","set_reorder_point","deactivate_product","activate_product","open_store","close_store","mark_fulfilled","mark_done","mark_paid","help","unknown"],
         },
         product_index: { type: SchemaType.INTEGER },
         value:         { type: SchemaType.NUMBER },
