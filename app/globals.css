@@ -15,6 +15,20 @@
   --color-border:     #E5E7EB;
   --color-cancelled:  #6b7280;
 
+  /* Status specific styles (light themed backgrounds and dark text) */
+  --color-status-pending-bg:    #fffbeb;
+  --color-status-pending-text:  #b45309;
+  --color-status-process-bg:    #eff6ff;
+  --color-status-process-text:  #1d4ed8;
+  --color-status-success-bg:    #f0fdf4;
+  --color-status-success-text:  #15803d;
+  --color-status-danger-bg:     #fef2f2;
+  --color-status-danger-text:   #b91c1c;
+
+  /* Shadows and visual hierarchy */
+  --color-shadow:       rgba(0, 0, 0, 0.04);
+  --color-shadow-hover: rgba(0, 0, 0, 0.08);
+
   /* Legacy aliases */
   --primary:  var(--color-primary);
   --accent:   var(--color-accent);

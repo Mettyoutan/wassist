@@ -79,6 +79,7 @@ export const ownerParserModel = genAI.getGenerativeModel({
 
 ACTION (pilih tepat satu):
 - get_revenue       : tanya omzet / laporan penjualan
+- get_orders        : tampilkan daftar order aktif / order yang masih berjalan
 - get_stock         : cek stok produk
 - update_price      : ubah harga produk
 - update_stock      : ubah jumlah stok produk
@@ -89,6 +90,7 @@ ACTION (pilih tepat satu):
 - close_store       : tutup toko
 - mark_fulfilled    : tandai order sudah dikirim / dalam pengiriman (status PAID → FULFILLED), notif customer
 - mark_done         : tandai order sudah selesai / diterima customer (status FULFILLED → DONE), notif customer
+- mark_paid         : tandai order sudah bayar secara manual / konfirmasi pembayaran transfer (status AWAITING_PAYMENT → PAID)
 - help              : minta bantuan atau daftar perintah
 - unknown           : perintah tidak jelas atau di luar daftar
 
@@ -108,7 +110,7 @@ ATURAN OUTPUT:
         action: {
           type: SchemaType.STRING,
           format: "enum",
-          enum: ["get_revenue","get_stock","update_price","update_stock","set_reorder_point","deactivate_product","activate_product","open_store","close_store","mark_fulfilled","mark_done","help","unknown"],
+          enum: ["get_revenue","get_orders","get_stock","update_price","update_stock","set_reorder_point","deactivate_product","activate_product","open_store","close_store","mark_fulfilled","mark_done","mark_paid","help","unknown"],
         },
         product_index: { type: SchemaType.INTEGER },
         value:         { type: SchemaType.NUMBER },
@@ -153,9 +155,13 @@ export const confirmationParserModel = genAI.getGenerativeModel({
   model: "gemini-3.1-flash-lite",
   systemInstruction: `Kamu adalah parser konfirmasi untuk toko WhatsApp.
 Tentukan apakah pesan berarti:
-- confirm  : setuju / ya / lanjut / oke (dalam konteks mengkonfirmasi sesuatu)
+- confirm  : setuju / ya / lanjut / oke / bayar / mau bayar / lanjut bayar / gas / gass / siap / deal / jalan (dalam konteks mengkonfirmasi sesuatu)
 - cancel   : tidak mau / batal / stop / gak jadi
 - ambiguous: tidak jelas, tidak bisa dipastikan
+
+PENTING: Jika pesan mengandung nama produk, kata "tambah", "mau pesan", "pesan X lagi",
+atau request item baru → SELALU kembalikan ambiguous.
+Customer mungkin ingin menambah item ke pesanan, bukan mengkonfirmasi pesanan selesai.
 
 Handle bahasa informal Indonesia: typo, singkatan, campur Inggris-Indonesia, slang (gak, ngga, gas, sip, dll).`,
   generationConfig: {
@@ -180,21 +186,45 @@ Handle bahasa informal Indonesia: typo, singkatan, campur Inggris-Indonesia, sla
 export const clarificationParserModel = genAI.getGenerativeModel({
   model: "gemini-3.1-flash-lite",
   systemInstruction: `Kamu adalah parser jawaban klarifikasi untuk toko WhatsApp.
-Context diberikan dalam prompt: jenis pertanyaan (varian atau jumlah), batasan valid, dan pesan customer.
-- Jika customer memilih atau menyebut angka yang valid → ekstrak ke "choice", "cancel": false
-- Jika customer ingin membatalkan (batal, gak jadi, stop, dll) → "choice": 0, "cancel": true
-- Jika tidak jelas atau tidak valid → "choice": 0, "cancel": false (akan trigger retry)
-Konversi kata ke angka: "dua" → 2, "tiga kilo" → 3, "pertama" → 1, dll.`,
+Context diberikan dalam prompt: jenis pertanyaan (varian atau jumlah), daftar kandidat, dan pesan customer.
+
+MODE VARIAN:
+- Customer bisa menyebut angka ("1", "nomor 2"), nama produk ("celana kulot"), atau keduanya
+- Customer BOLEH pilih lebih dari satu varian sekaligus ("keduanya", "yang pertama dan kedua", "celana kulot 1 dan palazzo 2")
+- Untuk setiap pilihan: ekstrak index (integer, 1-based sesuai daftar) dan qty jika disebutkan
+- "masing-masing 1" → qty 1 untuk semua pilihan yang disebutkan
+- Jika customer tidak sebut qty → qty tidak perlu diisi (omit)
+- Konversi kata ke angka: "dua" → 2, "pertama" → 1, "semua/keduanya" → semua kandidat
+
+MODE JUMLAH:
+- Ekstrak angka yang valid sebagai choices[0].index = 1, choices[0].qty = angka tersebut
+- Konversi kata ke angka: "tiga kilo" → 3, "dua" → 2
+
+CANCEL:
+- Jika customer ingin batal (batal, gak jadi, stop, tidak) → choices: [], cancel: true
+
+TIDAK VALID:
+- Jika tidak bisa diparse → choices: [], cancel: false (akan trigger retry)`,
   generationConfig: {
     temperature: 0.1,
     responseMimeType: "application/json",
     responseSchema: {
       type: SchemaType.OBJECT,
       properties: {
-        choice: { type: SchemaType.NUMBER },
+        choices: {
+          type: SchemaType.ARRAY,
+          items: {
+            type: SchemaType.OBJECT,
+            properties: {
+              index: { type: SchemaType.INTEGER },
+              qty:   { type: SchemaType.NUMBER },
+            },
+            required: ["index"],
+          },
+        },
         cancel: { type: SchemaType.BOOLEAN },
       },
-      required: ["choice", "cancel"],
+      required: ["choices", "cancel"],
     },
   },
   safetySettings,

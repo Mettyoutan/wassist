@@ -46,3 +46,35 @@ export async function getUserById(userId: string): Promise<{ phone: string } | n
   }
   return data;
 }
+
+// Lookup user id + last_address — untuk alamat tersimpan di awaiting_address handler.
+export async function getUserWithAddress(
+  tenantId: string,
+  phone: string
+): Promise<{ id: string; last_address: string | null } | null> {
+  const { data, error } = await supabaseAdmin
+    .from("users")
+    .select("id, last_address")
+    .eq("tenant_id", tenantId)
+    .eq("phone", phone)
+    .single();
+
+  if (error) {
+    if (error.code !== "PGRST116") console.error("[DB] getUserWithAddress:", error.message);
+    return null;
+  }
+  return data as unknown as { id: string; last_address: string | null };
+}
+
+export async function updateUserLastAddress(
+  userId: string,
+  address: string
+): Promise<void> {
+  const { error } = await supabaseAdmin
+    .from("users")
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .update({ last_address: address } as any)
+    .eq("id", userId);
+
+  if (error) console.error("[DB] updateUserLastAddress:", error.message);
+}

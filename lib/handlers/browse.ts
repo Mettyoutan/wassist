@@ -16,7 +16,7 @@ export async function handleBrowseIntent(tenant: { id: string }, senderPhone: st
       `• ${p.name} — Rp${p.price.toLocaleString("id-ID")}/${p.unit}`
     ).join("\n");
     await sendWhatsAppMessage(senderPhone,
-      `Halo! Ini koleksi kami:\n\n${list}\n\nBalas dengan nama produk + jumlah untuk order. Contoh: *Kaos Oversize 2*`
+      `Ini koleksi kami 😊\n\n${list}\n\nCaranya order: ketik nama produk + jumlah, contoh:\n*Kaos Oversize 2* atau *Celana Kulot M 1*`
     );
   }
 }

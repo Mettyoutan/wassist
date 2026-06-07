@@ -39,7 +39,7 @@ export async function GET() {
         status:    mapStatus(o.status),
         date:      fmt.format(new Date(o.created_at)),
         total:     o.total_amount,
-        items:     o.items.map((i) => ({ name: i.product_name, qty: i.qty })),
+        items:     o.items.map((i) => ({ name: i.product_name, qty: i.qty, price: i.price_at_order })),
       };
     });
 

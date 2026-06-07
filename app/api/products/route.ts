@@ -32,11 +32,38 @@ export async function GET() {
   return NextResponse.json({ products: result });
 }
 
-export async function POST(req: Request){
+export async function POST(request: Request) {
   const tenantId = process.env.DEMO_TENANT_ID;
   if (!tenantId) return NextResponse.json({ error: "DEMO_TENANT_ID not set" }, { status: 500 });
 
-  const {name, description, price, stock, category} = await req.json()
+  try {
+    const body = await request.json();
+    
+    // Validate required fields
+    if (!body.name || !body.price || !body.unit) {
+      return NextResponse.json({ error: "Name, price, and unit are required" }, { status: 400 });
+    }
 
-  
+    const { createProduct } = await import("@/server/db");
+    const result = await createProduct(
+      tenantId,
+      body.name,
+      Number(body.price),
+      Number(body.stock || 0),
+      body.unit,
+      Number(body.reorder_point || 5),
+      body.image_url || "",
+      body.category || "",
+      body.description || ""
+    );
+
+    if (!result) {
+      return NextResponse.json({ error: "Failed to create product in DB" }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true, id: result.id }, { status: 201 });
+  } catch (err: any) {
+    console.error("[API Products POST] error:", err);
+    return NextResponse.json({ error: err.message || "Failed to create product" }, { status: 500 });
+  }
 }

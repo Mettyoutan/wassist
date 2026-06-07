@@ -6,10 +6,11 @@ import {
   getUserById,
   getTenantById,
   decrementProductStock,
+  getProductsStockStatus,
 }                                              from "@/server/db";
 import { verifyMidtransSignature }             from "@/lib/midtrans";
 import { sendWhatsAppMessage }                 from "@/lib/whatsapp";
-import { paymentSuccessMessage }               from "@/lib/response-template";
+import { paymentSuccessMessage, lowStockAlertMessage }               from "@/lib/response-template";
 
 export async function POST(request: NextRequest) {
   try {
@@ -60,6 +61,9 @@ export async function POST(request: NextRequest) {
       await updateOrderStatus(order.id, "PAID", "PAID");
       console.log("[Midtrans] order marked PAID:", order_id);
 
+      // Fetch tenant untuk notif owner + low-stock alert
+      const tenant = await getTenantById(order.tenant_id);
+
       // Decrement stok per item — getOrderItemsByOrderId sekarang throw on error
       try {
         const items = await getOrderItemsByOrderId(order.id);
@@ -69,6 +73,16 @@ export async function POST(request: NextRequest) {
           } catch (e) {
             console.error("[Midtrans] decrementProductStock failed for product", item.product_id, e);
           }
+        }
+
+        // Low-stock alert — fire after all decrements
+        const productIds = items.map((i: any) => i.product_id);
+        const stockStatuses = await getProductsStockStatus(productIds);
+        const lowStock = stockStatuses.filter((p) => p.stock <= p.reorder_point);
+        if (lowStock.length > 0 && tenant?.owner_phone) {
+          sendWhatsAppMessage(tenant.owner_phone, lowStockAlertMessage(lowStock)).catch(
+            (err) => console.error("[midtrans/webhook] low-stock alert failed:", err)
+          );
         }
       } catch (e) {
         console.error("[Midtrans] getOrderItemsByOrderId failed — stock NOT decremented:", e);
@@ -90,7 +104,6 @@ export async function POST(request: NextRequest) {
       }
 
       // Notif owner
-      const tenant = await getTenantById(order.tenant_id);
       if (!tenant?.owner_phone) {
         console.error("[Midtrans] cannot notify owner — getTenantById null, tenantId:", order.tenant_id);
       } else {

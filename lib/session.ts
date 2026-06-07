@@ -63,3 +63,19 @@ export function cleanupExpiredSessions(): number {
 export function _getStoreSize(): number {
   return store.size;
 }
+
+// Peek at session without resetting — call BEFORE getSession to detect expiry.
+// Returns { wasActive: true } if session existed but is now expired; { wasActive: false } otherwise.
+export function peekExpiredSession(
+  tenantId: string,
+  customerPhone: string
+): { wasActive: boolean } {
+  const key = sessionKey(tenantId, customerPhone);
+  const existing = store.get(key);
+  if (!existing) return { wasActive: false };
+  const expired = Date.now() - existing.last_updated > SESSION_TTL_MS;
+  if (!expired) return { wasActive: false };
+  // Session exists but is expired — caller can send expiry message before getSession resets it
+  const wasActive = existing.state !== "idle";
+  return { wasActive };
+}

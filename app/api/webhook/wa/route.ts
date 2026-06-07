@@ -2,20 +2,39 @@ import { NextRequest, NextResponse }    from "next/server";
 import { getTenantByWaPhoneId,
          upsertCustomer,
          getActiveProducts,
-         updateOrderStatus }             from "@/server/db";
+         updateOrderStatus,
+         getOrderById,
+         getUserIdByPhone,
+         getLatestActiveOrderWithItems,
+         getUserWithAddress,
+         updateUserLastAddress }          from "@/server/db";
 import { getSession,
          setSession,
          clearSession,
-         cleanupExpiredSessions }        from "@/lib/session";
+         cleanupExpiredSessions,
+         peekExpiredSession }            from "@/lib/session";
 import { parseCustomerMessage }          from "@/lib/ai/customer-parser";
-import { sendWhatsAppMessage }           from "@/lib/whatsapp";
-import { parseConfirmationIntent }        from "@/lib/ai/confirmation-parser";
+import { sendWhatsAppMessage,
+         uploadWhatsAppMedia,
+         sendWhatsAppImageMessage }      from "@/lib/whatsapp";
+import { parseConfirmationIntent,
+         parsePaymentStateIntent }        from "@/lib/ai/confirmation-parser";
 import { greetingMessage,
          cancelOrderMessage,
          confirmationPendingMessage,
          modifyOrderInConfirmationMessage,
          modifyOrderHandoffMessage,
-         addressRequestMessage }        from "@/lib/response-template";
+         addressRequestMessage,
+         addressConfirmMessage,
+         qrPaymentCaption,
+         qrResendFailedMessage,
+         sessionExpiredMessage,
+         pendingPaymentReminderMessage,
+         orderCancelledMessage,
+         awaitingPaymentReminderMessage,
+         nonTextMessageResponse,
+         ownerModifyOrderNotification }  from "@/lib/response-template";
+import { getMidtransQrString }           from "@/lib/midtrans";
 import { handleBrowseIntent }            from "@/lib/handlers/browse";
 import { handleStatusIntent }            from "@/lib/handlers/status";
 import { handleHandoffIntent }           from "@/lib/handlers/handoff";
@@ -29,6 +48,7 @@ import type { DbTenant }                 from "@/lib/types/db";
 import type { WAWebhookBody, WAMessage,
               WATextMessage,
               WAOrderMessage }           from "@/lib/types/whatsapp";
+import QRCode from "qrcode";
 
 // ─── GET: Webhook verification dari Meta ─────────────────────────────────────
 export async function GET(request: NextRequest) {
@@ -81,16 +101,20 @@ export async function POST(request: NextRequest) {
 
     // ── Hanya proses teks selanjutnya ─────────────────────────────────────
     if (message.type !== "text") {
-      await sendWhatsAppMessage(
-        senderPhone,
-        "Maaf, saya hanya bisa terima pesan teks ya kak 😊"
-      );
+      await sendWhatsAppMessage(senderPhone, nonTextMessageResponse());
       return NextResponse.json({ status: "ok" });
     }
 
     // Get WA message
     const textMsg    = message as WATextMessage;
     const msgText    = textMsg.text.body;
+
+    // Check for expired session BEFORE getSession resets it
+    const { wasActive } = peekExpiredSession(tenant.id, senderPhone);
+    if (wasActive) {
+      await sendWhatsAppMessage(senderPhone, sessionExpiredMessage());
+      // Do NOT return here — let flow continue with fresh getSession below
+    }
 
     // Get current session
     const session    = getSession(tenant.id, senderPhone);
@@ -100,21 +124,27 @@ export async function POST(request: NextRequest) {
       const signal = await parseConfirmationIntent(msgText);
 
       if (signal === "confirm") {
+        const userWithAddr  = await getUserWithAddress(tenant.id, senderPhone);
+        const savedAddress  = userWithAddr?.last_address ?? null;
+
         setSession(tenant.id, senderPhone, {
           ...session,
-          state:        "awaiting_address",
-          last_updated: Date.now(),
+          state:                 "awaiting_address",
+          pending_saved_address: savedAddress ?? undefined,
+          last_updated:          Date.now(),
         });
-        await sendWhatsAppMessage(senderPhone, addressRequestMessage());
+
+        if (savedAddress) {
+          await sendWhatsAppMessage(senderPhone, addressConfirmMessage(savedAddress));
+        } else {
+          await sendWhatsAppMessage(senderPhone, addressRequestMessage());
+        }
         return NextResponse.json({ status: "ok" });
       }
 
       if (signal === "cancel") {
         clearSession(tenant.id, senderPhone);
-        await sendWhatsAppMessage(
-          senderPhone,
-          "Pesanan dibatalkan ya kak 👍 Ketik *menu* kalau mau lihat katalog lagi."
-        );
+        await sendWhatsAppMessage(senderPhone, orderCancelledMessage());
         return NextResponse.json({ status: "ok" });
       }
 
@@ -135,19 +165,59 @@ export async function POST(request: NextRequest) {
       } else if (parsedAdd.intent === "modify_order") {
         await sendWhatsAppMessage(senderPhone, modifyOrderInConfirmationMessage());
       } else {
-        await sendWhatsAppMessage(senderPhone, confirmationPendingMessage());
+        await sendWhatsAppMessage(senderPhone, confirmationPendingMessage(
+          session.pending_order?.items,
+          session.pending_order?.total,
+        ));
       }
       return NextResponse.json({ status: "ok" });
     }
 
     if (session.state === "awaiting_address") {
-      const address = msgText.trim();
-      if (!address) {
-        await sendWhatsAppMessage(senderPhone, addressRequestMessage());
-        return NextResponse.json({ status: "ok" });
+      const savedAddress = session.pending_saved_address;
+      let finalAddress: string | undefined;
+
+      if (savedAddress) {
+        // Customer has a saved address — parse reply as confirm/cancel/new text
+        const addrSignal = await parseConfirmationIntent(msgText);
+        if (addrSignal === "cancel") {
+          clearSession(tenant.id, senderPhone);
+          await sendWhatsAppMessage(senderPhone, orderCancelledMessage());
+          return NextResponse.json({ status: "ok" });
+        }
+        if (addrSignal === "confirm") {
+          finalAddress = savedAddress;
+        } else {
+          // ambiguous = customer typed a new address
+          const typed = msgText.trim();
+          if (!typed) {
+            await sendWhatsAppMessage(senderPhone, addressConfirmMessage(savedAddress));
+            return NextResponse.json({ status: "ok" });
+          }
+          finalAddress = typed;
+        }
+      } else {
+        // No saved address — plain text input
+        const typed = msgText.trim();
+        if (!typed) {
+          await sendWhatsAppMessage(senderPhone, addressRequestMessage());
+          return NextResponse.json({ status: "ok" });
+        }
+        finalAddress = typed;
       }
+
       try {
-        await processOrderConfirmation(tenant, senderPhone, session, address);
+        await processOrderConfirmation(tenant, senderPhone, session, finalAddress);
+        // Persist address for next order — only if changed, best-effort, fire-and-forget
+        const isNewAddress = finalAddress !== session.pending_saved_address;
+        if (isNewAddress) {
+          const userId = await getUserIdByPhone(tenant.id, senderPhone);
+          if (userId && finalAddress) {
+            updateUserLastAddress(userId, finalAddress).catch((err) =>
+              console.error("[webhook/awaiting_address] updateUserLastAddress failed:", err)
+            );
+          }
+        }
       } catch (err) {
         console.error("[Webhook] processOrderConfirmation (awaiting_address) failed:", err);
         clearSession(tenant.id, senderPhone);
@@ -162,8 +232,9 @@ export async function POST(request: NextRequest) {
     }
 
     if (session.state === "awaiting_payment") {
-      const signal = await parseConfirmationIntent(msgText);
-      if (signal === "cancel") {
+      const paymentSignal = await parsePaymentStateIntent(msgText);
+
+      if (paymentSignal === "cancel") {
         if (session.current_order_id) {
           try {
             await updateOrderStatus(session.current_order_id, "CANCELLED");
@@ -172,13 +243,49 @@ export async function POST(request: NextRequest) {
           }
         }
         clearSession(tenant.id, senderPhone);
-        await sendWhatsAppMessage(senderPhone, "Pesanan dibatalkan ya kak 👍 Ketik *menu* kalau mau lihat katalog lagi.");
+        await sendWhatsAppMessage(senderPhone, orderCancelledMessage());
         return NextResponse.json({ status: "ok" });
       }
-      await sendWhatsAppMessage(
-        senderPhone,
-        "Pesananmu masih menunggu pembayaran ya kak 💳 Silakan scan QR yang sudah dikirim."
-      );
+
+      if (paymentSignal === "resend_qr" && session.current_order_id) {
+        const order = await getOrderById(session.current_order_id);
+        if (!order?.midtrans_id) {
+          console.warn("[webhook/awaiting_payment] resend_qr: order has no midtrans_id", session.current_order_id);
+        } else {
+          const qrString = await getMidtransQrString(order.midtrans_id);
+          if (qrString) {
+            try {
+              const qrBuffer = await QRCode.toBuffer(qrString, {
+                type: "png", width: 400, margin: 2,
+                color: { dark: "#000000", light: "#FFFFFF" },
+              });
+              const mediaId = await uploadWhatsAppMedia(qrBuffer, "image/png");
+              const result  = await sendWhatsAppImageMessage(
+                senderPhone, mediaId,
+                qrPaymentCaption(order.total_amount, order.midtrans_id)
+              );
+              if (result.success) return NextResponse.json({ status: "ok" });
+            } catch (err) {
+              console.warn("[webhook/awaiting_payment] QR resend failed:", err);
+            }
+          }
+          // qrString null OR image send failed → always send fallback with order ID
+          await sendWhatsAppMessage(senderPhone, qrResendFailedMessage(order.midtrans_id));
+          return NextResponse.json({ status: "ok" });
+        }
+      }
+
+      // paymentSignal === "other" atau resend_qr tanpa order_id
+      if (session.current_order_id) {
+        const reminderOrder = await getOrderById(session.current_order_id);
+        const displayId = reminderOrder?.midtrans_id ?? session.current_order_id.slice(-6).toUpperCase();
+        await sendWhatsAppMessage(
+          senderPhone,
+          awaitingPaymentReminderMessage(displayId, reminderOrder?.total_amount),
+        );
+      } else {
+        await sendWhatsAppMessage(senderPhone, awaitingPaymentReminderMessage());
+      }
       return NextResponse.json({ status: "ok" });
     }
 
@@ -209,9 +316,20 @@ export async function POST(request: NextRequest) {
         await handleBrowseIntent(tenant, senderPhone, session);
         break;
 
-      case "order_new":
+      case "order_new": {
+        // Guard: block if customer already has unpaid AWAITING_PAYMENT order
+        const custUserId = await getUserIdByPhone(tenant.id, senderPhone);
+        if (custUserId) {
+          const activeOrder = await getLatestActiveOrderWithItems(tenant.id, custUserId);
+          if (activeOrder && activeOrder.status === "AWAITING_PAYMENT") {
+            const displayId = activeOrder.midtrans_id ?? activeOrder.id.slice(-6).toUpperCase();
+            await sendWhatsAppMessage(senderPhone, pendingPaymentReminderMessage(displayId));
+            break;
+          }
+        }
         await handleOrderIntent(tenant, senderPhone, products, parsed.items);
         break;
+      }
 
       case "order_status":
         await handleStatusIntent(tenant, senderPhone);
@@ -229,7 +347,7 @@ export async function POST(request: NextRequest) {
         await sendWhatsAppMessage(senderPhone, modifyOrderHandoffMessage());
         await sendWhatsAppMessage(
           tenant.owner_phone,
-          `⚠️ ${senderPhone} ingin modifikasi pesanan — perlu penanganan manual.`
+          ownerModifyOrderNotification(senderPhone)
         );
         break;
 

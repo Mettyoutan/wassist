@@ -71,7 +71,7 @@ export function variantClarificationMessage(
   const list = candidates
     .map((c, i) => `${i + 1}. ${c.name}${qtyLabel} — Rp${c.price.toLocaleString("id-ID")}/${c.unit}`)
     .join("\n");
-  return `Ada beberapa varian kak, yang mana? 😊\n\n${list}\n\nBalas nomornya ya!`;
+  return `Ada beberapa varian kak, yang mana? 😊\n\n${list}\n\nBalas nomornya atau nama produknya ya! Boleh pilih lebih dari satu 😊`;
 }
 
 export function quantityClarificationMessage(
@@ -123,9 +123,20 @@ export function repeatLastUnavailableMessage(unavailable: string[]): string {
   );
 }
 
-export function confirmationPendingMessage(): string {
+export function confirmationPendingMessage(
+  items?: Array<{ name: string; qty: number; size?: string; subtotal: number }>,
+  total?: number,
+): string {
+  const summary = items && items.length > 0 && total !== undefined
+    ? "\n\n" +
+      items.map(i => {
+        const sizeLabel = i.size ? ` (${i.size})` : "";
+        return `• ${i.name}${sizeLabel} x ${i.qty} = Rp${i.subtotal.toLocaleString("id-ID")}`;
+      }).join("\n") +
+      `\n*Total: Rp${total.toLocaleString("id-ID")}*`
+    : "";
   return (
-    `Pesananmu masih menunggu konfirmasi ya kak 😊\n\n` +
+    `Pesananmu masih menunggu konfirmasi ya kak 😊${summary}\n\n` +
     `• Balas *ya* untuk lanjut bayar\n` +
     `• Balas *batal* untuk ubah atau batalkan pesanan`
   );
@@ -218,4 +229,79 @@ export function ownerNewOrderMessage(
     addressLine +
     `Order ID: ${midtransId}`
   );
+}
+
+export function ownerMarkPaidMessage(displayId: string): string {
+  return `✅ Order *${displayId}* ditandai *lunas* — customer sudah dinotifikasi 💰`;
+}
+
+export function lowStockAlertMessage(
+  items: Array<{ name: string; stock: number; unit: string; reorder_point: number }>
+): string {
+  const lines = items.map(
+    (i) => `• ${i.name}: sisa *${i.stock} ${i.unit}* (reorder point: ${i.reorder_point})`
+  );
+  return (
+    `⚠️ *Stok menipis!*\n\n` +
+    lines.join("\n") +
+    `\n\nSegera restok ya kak 🙏`
+  );
+}
+
+export function qrResendFailedMessage(midtransId: string): string {
+  return (
+    `Maaf kak, gagal kirim ulang QR 😔\n\n` +
+    `Order ID kamu: *${midtransId}*\n` +
+    `Silakan screenshot pesan ini dan hubungi kami untuk konfirmasi pembayaran.`
+  );
+}
+
+export function sessionExpiredMessage(): string {
+  return (
+    `Sesi kamu sudah berakhir karena tidak ada aktivitas selama 30 menit 😊\n\n` +
+    `Ketik *menu* untuk mulai lagi ya kak!`
+  );
+}
+
+export function pendingPaymentReminderMessage(displayId: string): string {
+  return (
+    `Kak, kamu masih punya pesanan yang belum dibayar 💳\n\n` +
+    `Order ID: *${displayId}*\n\n` +
+    `Selesaikan pembayaran dulu ya kak, atau ketik *batal* untuk membatalkan pesanan yang ada.`
+  );
+}
+
+export function orderCancelledMessage(): string {
+  return "Pesanan dibatalkan ya kak 👍 Ketik *menu* kalau mau lihat katalog lagi.";
+}
+
+export function addressConfirmMessage(savedAddress: string): string {
+  return (
+    `📦 Kirim ke alamat ini ya kak?\n\n` +
+    `*${savedAddress}*\n\n` +
+    `Balas *ya* untuk konfirmasi, ketik *batal* untuk membatalkan, atau ketik alamat baru 😊`
+  );
+}
+
+export function clarificationOutOfStockMessage(): string {
+  return "Maaf kak, stok tidak mencukupi untuk semua pilihan tersebut 😢 Ketik *menu* untuk lihat stok terkini.";
+}
+
+export function awaitingPaymentReminderMessage(orderId?: string, total?: number): string {
+  const orderLine = orderId
+    ? `Order: *${orderId}*${total !== undefined ? ` — Rp${total.toLocaleString("id-ID")}` : ""}\n`
+    : "";
+  return (
+    `Pesananmu masih menunggu pembayaran ya kak 💳\n` +
+    orderLine +
+    `Silakan scan QR yang sudah dikirim, atau ketik *kirim ulang QR* 😊`
+  );
+}
+
+export function nonTextMessageResponse(): string {
+  return "Maaf, saya hanya bisa terima pesan teks ya kak 😊";
+}
+
+export function ownerModifyOrderNotification(customerPhone: string): string {
+  return `⚠️ ${customerPhone} ingin modifikasi pesanan — perlu penanganan manual.`;
 }

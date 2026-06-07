@@ -4,6 +4,7 @@ import { ownerParserModel } from "../ai/models";
 export const OwnerCommandSchema = z.object({
   action: z.enum([
     "get_revenue",
+    "get_orders",
     "get_stock",
     "update_price",
     "update_stock",
@@ -14,6 +15,7 @@ export const OwnerCommandSchema = z.object({
     "close_store",
     "mark_fulfilled",
     "mark_done",
+    "mark_paid",
     "help",
     "unknown",
   ]),

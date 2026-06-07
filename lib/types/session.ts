@@ -56,11 +56,12 @@ export type PendingOwnerAction = {
 };
 
 export type Session = {
-  state:                  SessionState;
-  pending_order?:         PendingOrder;         // hanya saat awaiting_confirmation
-  current_order_id?:      string;               // UUID order di DB, hanya saat awaiting_payment
-  pending_owner_action?:  PendingOwnerAction;   // hanya saat awaiting_owner_confirmation
-  pending_clarification?: PendingClarification; // hanya saat awaiting_clarification
-  retry_count:            number;               // 0 → minta klarifikasi, 1 → handoff ke owner
-  last_updated:           number;               // Date.now() — untuk TTL check
+  state:                   SessionState;
+  pending_order?:          PendingOrder;         // hanya saat awaiting_confirmation
+  current_order_id?:       string;               // UUID order di DB, hanya saat awaiting_payment
+  pending_saved_address?:  string;               // alamat tersimpan — set saat awaiting_address
+  pending_owner_action?:   PendingOwnerAction;   // hanya saat awaiting_owner_confirmation
+  pending_clarification?:  PendingClarification; // hanya saat awaiting_clarification
+  retry_count:             number;               // 0 → minta klarifikasi, 1 → handoff ke owner
+  last_updated:            number;               // Date.now() — untuk TTL check
 };

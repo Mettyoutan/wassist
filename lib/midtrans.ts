@@ -92,3 +92,25 @@ export function verifyMidtransSignature(
   }
   return match;
 }
+
+export async function getMidtransQrString(orderId: string): Promise<string | null> {
+  const serverKey = process.env.MIDTRANS_SERVER_KEY ?? "";
+  const isProduction = process.env.MIDTRANS_IS_PRODUCTION === "true";
+  const baseUrl = isProduction
+    ? "https://api.midtrans.com"
+    : "https://api.sandbox.midtrans.com";
+
+  const authHeader = "Basic " + Buffer.from(serverKey + ":").toString("base64");
+
+  try {
+    const res = await fetch(`${baseUrl}/v2/${orderId}/status`, {
+      headers: { Authorization: authHeader },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return (data.qr_string as string) ?? null;
+  } catch (err) {
+    console.error("[midtrans] getMidtransQrString failed:", err);
+    return null;
+  }
+}
