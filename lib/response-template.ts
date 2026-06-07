@@ -123,9 +123,20 @@ export function repeatLastUnavailableMessage(unavailable: string[]): string {
   );
 }
 
-export function confirmationPendingMessage(): string {
+export function confirmationPendingMessage(
+  items?: Array<{ name: string; qty: number; size?: string; subtotal: number }>,
+  total?: number,
+): string {
+  const summary = items && items.length > 0 && total !== undefined
+    ? "\n\n" +
+      items.map(i => {
+        const sizeLabel = i.size ? ` (${i.size})` : "";
+        return `• ${i.name}${sizeLabel} x ${i.qty} = Rp${i.subtotal.toLocaleString("id-ID")}`;
+      }).join("\n") +
+      `\n*Total: Rp${total.toLocaleString("id-ID")}*`
+    : "";
   return (
-    `Pesananmu masih menunggu konfirmasi ya kak 😊\n\n` +
+    `Pesananmu masih menunggu konfirmasi ya kak 😊${summary}\n\n` +
     `• Balas *ya* untuk lanjut bayar\n` +
     `• Balas *batal* untuk ubah atau batalkan pesanan`
   );
@@ -276,8 +287,15 @@ export function clarificationOutOfStockMessage(): string {
   return "Maaf kak, stok tidak mencukupi untuk semua pilihan tersebut 😢 Ketik *menu* untuk lihat stok terkini.";
 }
 
-export function awaitingPaymentReminderMessage(): string {
-  return "Pesananmu masih menunggu pembayaran ya kak 💳 Silakan scan QR yang sudah dikirim.";
+export function awaitingPaymentReminderMessage(orderId?: string, total?: number): string {
+  const orderLine = orderId
+    ? `Order: *${orderId}*${total !== undefined ? ` — Rp${total.toLocaleString("id-ID")}` : ""}\n`
+    : "";
+  return (
+    `Pesananmu masih menunggu pembayaran ya kak 💳\n` +
+    orderLine +
+    `Silakan scan QR yang sudah dikirim, atau ketik *kirim ulang QR* 😊`
+  );
 }
 
 export function nonTextMessageResponse(): string {

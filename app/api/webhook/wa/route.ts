@@ -165,7 +165,10 @@ export async function POST(request: NextRequest) {
       } else if (parsedAdd.intent === "modify_order") {
         await sendWhatsAppMessage(senderPhone, modifyOrderInConfirmationMessage());
       } else {
-        await sendWhatsAppMessage(senderPhone, confirmationPendingMessage());
+        await sendWhatsAppMessage(senderPhone, confirmationPendingMessage(
+          session.pending_order?.items,
+          session.pending_order?.total,
+        ));
       }
       return NextResponse.json({ status: "ok" });
     }
@@ -273,7 +276,16 @@ export async function POST(request: NextRequest) {
       }
 
       // paymentSignal === "other" atau resend_qr tanpa order_id
-      await sendWhatsAppMessage(senderPhone, awaitingPaymentReminderMessage());
+      if (session.current_order_id) {
+        const reminderOrder = await getOrderById(session.current_order_id);
+        const displayId = reminderOrder?.midtrans_id ?? session.current_order_id.slice(-6).toUpperCase();
+        await sendWhatsAppMessage(
+          senderPhone,
+          awaitingPaymentReminderMessage(displayId, reminderOrder?.total_amount),
+        );
+      } else {
+        await sendWhatsAppMessage(senderPhone, awaitingPaymentReminderMessage());
+      }
       return NextResponse.json({ status: "ok" });
     }
 
