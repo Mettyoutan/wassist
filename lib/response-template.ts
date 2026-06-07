@@ -4,7 +4,8 @@
 export function orderConfirmationMessage(
     items: Array<{ name: string; qty: number; size?: string; subtotal: number }>,
     total: number,
-    notFoundNames?: string[]
+    notFoundNames?: string[],
+    adjustedItems?: string[]
 ): string {
     const itemLines = items
         .map(i => {
@@ -17,8 +18,12 @@ export function orderConfirmationMessage(
         ? `\n\n_Produk tidak tersedia: ${notFoundNames.join(", ")}_`
         : "";
 
-    return `Oke kak! Ini pesanannya ya:\n\n${itemLines}\n\n*Total: Rp${total.toLocaleString("id-ID")}*${notFoundNote}\n\nMau lanjut bayar? Balas *ya* atau *batal* 😊`;
-};
+    const adjustedNote = adjustedItems && adjustedItems.length > 0
+        ? `\n\n_Stok terbatas, qty disesuaikan: ${adjustedItems.join(", ")}_`
+        : "";
+
+    return `Oke kak! Ini pesanannya ya:\n\n${itemLines}\n\n*Total: Rp${total.toLocaleString("id-ID")}*${notFoundNote}${adjustedNote}\n\nMau lanjut bayar? Balas *ya* atau *batal* 😊`;
+}
 
 export function itemsNotFoundMessage(names: string[]): string {
     const list = names.map(n => `• ${n}`).join("\n");
@@ -59,8 +64,27 @@ export function paymentSuccessMessage(orderId: string): string {
 }
 
 export function storeClosedMessage(closedUntil?: string | null): string {
-  const until = closedUntil ? ` hingga ${closedUntil}` : "";
-  return `Maaf kak, toko kami sedang tutup${until} 🙏 Silakan order lagi nanti ya!`;
+  let untilText = "";
+  if (closedUntil) {
+    try {
+      const d = new Date(closedUntil);
+      untilText = ` hingga ${d.toLocaleString("id-ID", {
+        weekday:  "long",
+        day:      "numeric",
+        month:    "long",
+        hour:     "2-digit",
+        minute:   "2-digit",
+        timeZone: "Asia/Jakarta",
+      })}`;
+    } catch {
+      untilText = ` hingga ${closedUntil}`;
+    }
+  }
+  return `Maaf kak, toko kami sedang tutup${untilText} 🙏 Silakan order lagi nanti ya!`;
+}
+
+export function orderExpiredMessage(): string {
+  return "Waktu pembayaran pesananmu habis kak 😔 Ketik *menu* untuk pesan ulang ya.";
 }
 
 export function variantClarificationMessage(
@@ -312,4 +336,32 @@ export function nonTextMessageResponse(): string {
 
 export function ownerModifyOrderNotification(customerPhone: string): string {
   return `⚠️ ${customerPhone} ingin modifikasi pesanan — perlu penanganan manual.`;
+}
+
+export function ownerStoreOpenedMessage(): string {
+  return "✅ Toko sekarang *buka*!";
+}
+
+export function ownerStoreClosedConfirmMessage(): string {
+  return "🔒 Toko *tutup*. Balas *buka* untuk buka lagi.";
+}
+
+export function ownerNoActiveOrdersMessage(): string {
+  return "Tidak ada order aktif saat ini 📭";
+}
+
+export function ownerNoOrderForFulfillMessage(): string {
+  return "Tidak ada order yang menunggu pengiriman saat ini 📭";
+}
+
+export function ownerNoOrderForDoneMessage(): string {
+  return "Tidak ada order dalam pengiriman saat ini 📭";
+}
+
+export function ownerNoOrderForPaidMessage(): string {
+  return "Tidak ada order yang menunggu pembayaran saat ini 📭";
+}
+
+export function ownerPaymentReceivedMessage(orderId: string, total: number): string {
+  return `💰 *Pembayaran masuk!*\nOrder: ${orderId}\nTotal: *Rp${total.toLocaleString("id-ID")}*`;
 }
