@@ -17,8 +17,7 @@ export async function PATCH(
       reorder_point: Number(body.reorder_point || 5),
       image_url: body.image_url || "",
       category: body.category || "",
-      description: body.description || "",
-      meta_retailer_id: body.meta_retailer_id || ""
+      description: body.description || ""
     });
 
     return Response.json({ success: true });

@@ -102,11 +102,6 @@ export default function StockManagement() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const meta_retailer_id = formData.name
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, '-')
-    
     const payload = {
       name: formData.name,
       price: Number(formData.price),
@@ -116,7 +111,6 @@ export default function StockManagement() {
       image_url: formData.image_url,
       category: formData.category,
       description: formData.description,
-      meta_retailer_id: meta_retailer_id,
     };
 
     try {
