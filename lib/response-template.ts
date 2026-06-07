@@ -268,6 +268,6 @@ export function addressConfirmMessage(savedAddress: string): string {
   return (
     `📦 Kirim ke alamat ini ya kak?\n\n` +
     `*${savedAddress}*\n\n` +
-    `Balas *ya* untuk konfirmasi, atau ketik alamat baru 😊`
+    `Balas *ya* untuk konfirmasi, ketik *batal* untuk membatalkan, atau ketik alamat baru 😊`
   );
 }

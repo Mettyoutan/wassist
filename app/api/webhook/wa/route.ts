@@ -204,12 +204,15 @@ export async function POST(request: NextRequest) {
 
       try {
         await processOrderConfirmation(tenant, senderPhone, session, finalAddress);
-        // Persist address for next order — best-effort, fire-and-forget
-        const userId = await getUserIdByPhone(tenant.id, senderPhone);
-        if (userId && finalAddress) {
-          updateUserLastAddress(userId, finalAddress).catch((err) =>
-            console.error("[webhook/awaiting_address] updateUserLastAddress failed:", err)
-          );
+        // Persist address for next order — only if changed, best-effort, fire-and-forget
+        const isNewAddress = finalAddress !== session.pending_saved_address;
+        if (isNewAddress) {
+          const userId = await getUserIdByPhone(tenant.id, senderPhone);
+          if (userId && finalAddress) {
+            updateUserLastAddress(userId, finalAddress).catch((err) =>
+              console.error("[webhook/awaiting_address] updateUserLastAddress failed:", err)
+            );
+          }
         }
       } catch (err) {
         console.error("[Webhook] processOrderConfirmation (awaiting_address) failed:", err);

@@ -91,11 +91,12 @@ export async function processOrderConfirmation(
 
   // 6. Update session → awaiting_payment (sebelum notif owner — agar state konsisten meski notif gagal)
   setSession(tenant.id, senderPhone, {
-    state:            "awaiting_payment",
-    current_order_id: orderId,
-    pending_order:    undefined,
-    retry_count:      0,
-    last_updated:     Date.now(),
+    state:                 "awaiting_payment",
+    current_order_id:      orderId,
+    pending_order:         undefined,
+    pending_saved_address: undefined,
+    retry_count:           0,
+    last_updated:          Date.now(),
   });
 
   // 7. Notif owner — best-effort, jangan abort flow jika gagal
