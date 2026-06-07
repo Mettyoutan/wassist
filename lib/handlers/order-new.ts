@@ -204,8 +204,8 @@ export async function handleOrderIntent(
   }
 
   if (clarification !== null) {
-    // Preserve existing items so clarification flow can merge them back
-    clarification.resolved = [...existingItems, ...clarification.resolved];
+    // Use post-loop resolvedItems so items resolved AFTER the first ambiguous item are not lost
+    clarification.resolved = [...existingItems, ...resolvedItems];
     setSession(tenant.id, senderPhone, {
       state:                 "awaiting_clarification",
       pending_clarification: clarification,

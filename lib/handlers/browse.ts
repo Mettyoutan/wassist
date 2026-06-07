@@ -1,13 +1,13 @@
 import { sendWhatsAppMessage, sendCatalogMessage } from "@/lib/whatsapp";
 import { getActiveProducts } from "@/server/db";
 
-export async function handleBrowseIntent(tenant: { id: string }, senderPhone: string, _session?: unknown) {
+export async function handleBrowseIntent(tenant: { id: string; name: string }, senderPhone: string, _session?: unknown) {
   const catalogId = process.env.META_CATALOG_ID; 
 
   if (catalogId) {
     // Kirim WA Catalog visual
     await sendCatalogMessage(senderPhone, catalogId,
-      "Ini koleksi Olshop Kak Nina 🛍️ Tap produk untuk order!"
+      `Ini koleksi ${tenant.name} 🛍️ Tap produk untuk order!`
     );
   } else {
     // Fallback: teks daftar produk

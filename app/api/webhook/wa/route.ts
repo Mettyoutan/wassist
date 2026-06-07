@@ -339,9 +339,25 @@ export async function POST(request: NextRequest) {
         await handleRepeatLastIntent(tenant, senderPhone, session);
         break;
 
-      case "cancel_order":
+      case "cancel_order": {
+        // If customer has an active unpaid order, actually cancel it
+        const cancelUserId = await getUserIdByPhone(tenant.id, senderPhone);
+        if (cancelUserId) {
+          const activeOrder = await getLatestActiveOrderWithItems(tenant.id, cancelUserId);
+          if (activeOrder && activeOrder.status === "AWAITING_PAYMENT") {
+            try {
+              await updateOrderStatus(activeOrder.id, "CANCELLED");
+            } catch (err) {
+              console.error("[Webhook] cancel_order: updateOrderStatus failed:", err);
+            }
+            clearSession(tenant.id, senderPhone);
+            await sendWhatsAppMessage(senderPhone, orderCancelledMessage());
+            break;
+          }
+        }
         await sendWhatsAppMessage(senderPhone, cancelOrderMessage());
         break;
+      }
 
       case "modify_order":
         await sendWhatsAppMessage(senderPhone, modifyOrderHandoffMessage());
