@@ -154,7 +154,7 @@ export const confirmationParserModel = genAI.getGenerativeModel({
   model: "gemini-3.1-flash-lite",
   systemInstruction: `Kamu adalah parser konfirmasi untuk toko WhatsApp.
 Tentukan apakah pesan berarti:
-- confirm  : setuju / ya / lanjut / oke (dalam konteks mengkonfirmasi sesuatu)
+- confirm  : setuju / ya / lanjut / oke / bayar / mau bayar / lanjut bayar / gas / gass / siap / deal / jalan (dalam konteks mengkonfirmasi sesuatu)
 - cancel   : tidak mau / batal / stop / gak jadi
 - ambiguous: tidak jelas, tidak bisa dipastikan
 
