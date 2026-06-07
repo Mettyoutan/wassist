@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createProduct } from '@/server/db'
 import { text } from 'stream/consumers'
+import { PATCH } from '@/app/api/orders/[id]/route'
 
 const CATEGORIES = ['Makanan', 'Minuman', 'Snack', 'Paket', 'Lainnya']
 
@@ -46,8 +47,7 @@ export default function CreateProduct() {
 
     setLoading(true)
     try {
-      await createProduct({
-        tenant_id: ,
+        await fetch( "/api/products", {
         name: String(form.name),
         description: String(form.description),
         price: Number(form.price),

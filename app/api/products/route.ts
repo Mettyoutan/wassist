@@ -31,3 +31,12 @@ export async function GET() {
 
   return NextResponse.json({ products: result });
 }
+
+export async function POST(req: Request){
+  const tenantId = process.env.DEMO_TENANT_ID;
+  if (!tenantId) return NextResponse.json({ error: "DEMO_TENANT_ID not set" }, { status: 500 });
+
+  const {name, description, price, stock, category} = await req.json()
+
+  
+}
