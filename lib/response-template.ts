@@ -275,3 +275,15 @@ export function addressConfirmMessage(savedAddress: string): string {
 export function clarificationOutOfStockMessage(): string {
   return "Maaf kak, stok tidak mencukupi untuk semua pilihan tersebut 😢 Ketik *menu* untuk lihat stok terkini.";
 }
+
+export function awaitingPaymentReminderMessage(): string {
+  return "Pesananmu masih menunggu pembayaran ya kak 💳 Silakan scan QR yang sudah dikirim.";
+}
+
+export function nonTextMessageResponse(): string {
+  return "Maaf, saya hanya bisa terima pesan teks ya kak 😊";
+}
+
+export function ownerModifyOrderNotification(customerPhone: string): string {
+  return `⚠️ ${customerPhone} ingin modifikasi pesanan — perlu penanganan manual.`;
+}

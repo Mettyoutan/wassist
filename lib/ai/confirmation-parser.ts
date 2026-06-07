@@ -67,3 +67,27 @@ export async function parseClarificationInput(
     return empty;
   }
 }
+
+export type PaymentStateSignal = "resend_qr" | "cancel" | "other";
+
+export async function parsePaymentStateIntent(
+  text: string,
+): Promise<PaymentStateSignal> {
+  try {
+    const result = await confirmationParserModel.generateContent(
+      `Konteks: customer sedang menunggu pembayaran QRIS untuk pesanannya.
+- "confirm"  : customer ingin lihat/kirim ulang QR, minta link bayar, tanya cara bayar, mau lanjut bayar (kata: scan, qr, bayar, kirim ulang, mau bayar, gimana bayarnya, dll)
+- "cancel"   : customer ingin batalkan pesanan (kata: batal, cancel, gak jadi, dll)
+- "ambiguous": selain itu
+Pesan customer: "${text}"`
+    );
+    const raw    = JSON.parse(result.response.text());
+    const parsed = ConfirmSchema.safeParse(raw);
+    if (!parsed.success) return "other";
+    if (parsed.data.signal === "confirm") return "resend_qr";
+    if (parsed.data.signal === "cancel")  return "cancel";
+    return "other";
+  } catch {
+    return "other";
+  }
+}

@@ -17,7 +17,8 @@ import { parseCustomerMessage }          from "@/lib/ai/customer-parser";
 import { sendWhatsAppMessage,
          uploadWhatsAppMedia,
          sendWhatsAppImageMessage }      from "@/lib/whatsapp";
-import { parseConfirmationIntent }        from "@/lib/ai/confirmation-parser";
+import { parseConfirmationIntent,
+         parsePaymentStateIntent }        from "@/lib/ai/confirmation-parser";
 import { greetingMessage,
          cancelOrderMessage,
          confirmationPendingMessage,
@@ -29,7 +30,10 @@ import { greetingMessage,
          qrResendFailedMessage,
          sessionExpiredMessage,
          pendingPaymentReminderMessage,
-         orderCancelledMessage }  from "@/lib/response-template";
+         orderCancelledMessage,
+         awaitingPaymentReminderMessage,
+         nonTextMessageResponse,
+         ownerModifyOrderNotification }  from "@/lib/response-template";
 import { getMidtransQrString }           from "@/lib/midtrans";
 import { handleBrowseIntent }            from "@/lib/handlers/browse";
 import { handleStatusIntent }            from "@/lib/handlers/status";
@@ -97,10 +101,7 @@ export async function POST(request: NextRequest) {
 
     // ── Hanya proses teks selanjutnya ─────────────────────────────────────
     if (message.type !== "text") {
-      await sendWhatsAppMessage(
-        senderPhone,
-        "Maaf, saya hanya bisa terima pesan teks ya kak 😊"
-      );
+      await sendWhatsAppMessage(senderPhone, nonTextMessageResponse());
       return NextResponse.json({ status: "ok" });
     }
 
@@ -228,40 +229,9 @@ export async function POST(request: NextRequest) {
     }
 
     if (session.state === "awaiting_payment") {
-      // QR resend: customer minta kirim ulang QR
-      const qrKeywords = ["qr", "bayar", "kirim ulang", "resend", "payment", "scan"];
-      const wantsQrResend = qrKeywords.some((kw) =>
-        msgText.toLowerCase().includes(kw)
-      );
+      const paymentSignal = await parsePaymentStateIntent(msgText);
 
-      if (wantsQrResend && session.current_order_id) {
-        const order = await getOrderById(session.current_order_id);
-        if (order?.midtrans_id) {
-          const qrString = await getMidtransQrString(order.midtrans_id);
-          if (qrString) {
-            try {
-              const qrBuffer = await QRCode.toBuffer(qrString, {
-                type: "png", width: 400, margin: 2,
-                color: { dark: "#000000", light: "#FFFFFF" },
-              });
-              const mediaId = await uploadWhatsAppMedia(qrBuffer, "image/png");
-              const result = await sendWhatsAppImageMessage(
-                senderPhone, mediaId,
-                qrPaymentCaption(order.total_amount, order.midtrans_id)
-              );
-              if (result.success) return NextResponse.json({ status: "ok" });
-            } catch (err) {
-              console.warn("[webhook/awaiting_payment] QR resend failed:", err);
-            }
-          }
-          // Fallback if QR fetch/send failed
-          await sendWhatsAppMessage(senderPhone, qrResendFailedMessage(order.midtrans_id));
-        }
-        return NextResponse.json({ status: "ok" });
-      }
-
-      const signal = await parseConfirmationIntent(msgText);
-      if (signal === "cancel") {
+      if (paymentSignal === "cancel") {
         if (session.current_order_id) {
           try {
             await updateOrderStatus(session.current_order_id, "CANCELLED");
@@ -273,10 +243,34 @@ export async function POST(request: NextRequest) {
         await sendWhatsAppMessage(senderPhone, orderCancelledMessage());
         return NextResponse.json({ status: "ok" });
       }
-      await sendWhatsAppMessage(
-        senderPhone,
-        "Pesananmu masih menunggu pembayaran ya kak 💳 Silakan scan QR yang sudah dikirim."
-      );
+
+      if (paymentSignal === "resend_qr" && session.current_order_id) {
+        const order = await getOrderById(session.current_order_id);
+        if (order?.midtrans_id) {
+          const qrString = await getMidtransQrString(order.midtrans_id);
+          if (qrString) {
+            try {
+              const qrBuffer = await QRCode.toBuffer(qrString, {
+                type: "png", width: 400, margin: 2,
+                color: { dark: "#000000", light: "#FFFFFF" },
+              });
+              const mediaId = await uploadWhatsAppMedia(qrBuffer, "image/png");
+              const result  = await sendWhatsAppImageMessage(
+                senderPhone, mediaId,
+                qrPaymentCaption(order.total_amount, order.midtrans_id)
+              );
+              if (result.success) return NextResponse.json({ status: "ok" });
+            } catch (err) {
+              console.warn("[webhook/awaiting_payment] QR resend failed:", err);
+            }
+            await sendWhatsAppMessage(senderPhone, qrResendFailedMessage(order.midtrans_id));
+          }
+          return NextResponse.json({ status: "ok" });
+        }
+      }
+
+      // paymentSignal === "other" atau resend_qr tanpa order_id
+      await sendWhatsAppMessage(senderPhone, awaitingPaymentReminderMessage());
       return NextResponse.json({ status: "ok" });
     }
 
@@ -338,7 +332,7 @@ export async function POST(request: NextRequest) {
         await sendWhatsAppMessage(senderPhone, modifyOrderHandoffMessage());
         await sendWhatsAppMessage(
           tenant.owner_phone,
-          `⚠️ ${senderPhone} ingin modifikasi pesanan — perlu penanganan manual.`
+          ownerModifyOrderNotification(senderPhone)
         );
         break;
 
