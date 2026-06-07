@@ -1,5 +1,5 @@
 # CLAUDE.md — WAssist Project Context
-> Last updated: 7 Juni 2026
+> Last updated: 8 Juni 2026
 
 ---
 
@@ -309,7 +309,7 @@ export type DbOrder = Omit<Tables<"orders">, "status" | "payment_status"> & {
 | | `customerParserModel` | `ownerParserModel` | `generatorModel` | `confirmationParserModel` | `clarificationParserModel` |
 |---|---|---|---|---|---|
 | Dipakai | Parse pesan customer | Parse perintah owner | Narasi analytics owner | Deteksi confirm/cancel | Parse jawaban clarification |
-| Output | `ParsedIntent` (JSON schema) | `OwnerCommand` (JSON schema) | Free-form teks | `signal` enum | `choice` + `cancel` |
+| Output | `ParsedIntent` (JSON schema) | `OwnerCommand` (JSON schema) | Free-form teks | `signal` enum | `choices[]` + `cancel` |
 | Temperature | 0.1 | 0.1 | 0.4 | 0.1 | 0.1 |
 | File | `lib/ai/customer-parser.ts` | `lib/owner/parser.ts` | `lib/owner/generator.ts` | `lib/ai/confirmation-parser.ts` | `lib/ai/confirmation-parser.ts` |
 
@@ -332,9 +332,10 @@ low_confidence  → tidak jelas / di luar konteks → handoff ke owner
 > 2. `lib/ai/customer-parser.ts` — `ParsedIntentSchema` Zod enum
 > 3. `app/api/webhook/wa/route.ts` — `case` baru di switch
 
-### Owner Command — 14 Action (`lib/owner/parser.ts`)
+### Owner Command — 15 Action (`lib/owner/parser.ts`)
 ```
 get_revenue        → omzet / laporan → queryRevenueData + Gemini narasi
+get_orders         → daftar order aktif (PENDING/AWAITING_PAYMENT/PAID/FULFILLED)
 get_stock          → cek stok
 update_price       ← BUTUH KONFIRMASI
 update_stock       ← BUTUH KONFIRMASI
@@ -433,14 +434,22 @@ export type Session = {
 ```typescript
 // lib/ai/confirmation-parser.ts
 // JANGAN pakai Set keyword matching — sudah DIHAPUS
-const signal = await parseConfirmationIntent(msgText);
+// Signature: parseConfirmationIntent(text, context?: "customer" | "owner")
+// Default context = "customer" (customer callers tidak perlu pass arg kedua)
+// Owner caller WAJIB pass "owner" agar PENTING rule (product name → ambiguous) tidak berlaku
+const signal = await parseConfirmationIntent(msgText);            // customer
+const signal = await parseConfirmationIntent(text, "owner");     // owner mutation confirm
 // signal: "confirm" | "cancel" | "ambiguous"
 // Handle bahasa informal, typo, slang Indonesia via Gemini
 
 // Untuk clarification (varian/qty):
-const { choice, cancel } = await parseClarificationInput(
-  msgText, kind, candidateCount, integerOnly, maxStock
+// candidates = array objek dengan minimal field `name: string`
+// Return: choices[] = [{index: number, qty?: number}], cancel: boolean
+// Customer bisa jawab dengan angka, nama produk, atau multi-select sekaligus
+const { choices, cancel } = await parseClarificationInput(
+  msgText, kind, candidates, integerOnly, maxStock
 );
+// ClarificationChoice type di-export dari lib/ai/confirmation-parser.ts
 ```
 
 ---
@@ -525,7 +534,7 @@ const product = await getProductByRetailerId(tenant.id, cartItem.product_retaile
 | order_status | ✅ | `lib/handlers/status.ts` |
 | greeting | ✅ | `lib/response-template.ts` → `greetingMessage()` |
 | handoff | ✅ | `lib/handlers/handoff.ts` |
-| Owner commands (11 action) | ✅ | `lib/handlers/owner.ts` |
+| Owner commands (15 action) | ✅ | `lib/handlers/owner.ts` |
 | order_new + slot-filling klarifikasi | ✅ | `lib/handlers/order-new.ts`, `lib/handlers/clarification.ts` |
 | Payment QRIS end-to-end | ✅ | `lib/handlers/confirm-order.ts`, `lib/midtrans.ts` |
 | Midtrans callback webhook | ✅ | `app/api/webhook/midtrans/route.ts` |
@@ -584,6 +593,23 @@ const product = await getProductByRetailerId(tenant.id, cartItem.product_retaile
 - [ ] Cloud Run deploy + update Meta Developer Console webhook URL
 - [ ] End-to-end test bot dari WA real device setelah deploy
 - [ ] Jalankan `scripts/delete-demo.sql` + `scripts/seed-demo.sql` di Supabase sebelum demo
+
+### Fitur Baru (per 8 Juni 2026 sesi 1) ✅
+- ✅ Multi-select clarification: customer bisa pilih beberapa varian sekaligus (`"kulot dan palazzo masing-masing 1"`)
+- ✅ Natural language clarification: customer bisa sebut nama produk bukan hanya angka
+- ✅ Dropped items feedback: item stok habis di multi-select → customer dapat notif nama produk yang dilewati
+- ✅ Quantity mode fix: `choices[0].qty` tidak fallback ke `index` (silent wrong-qty bug)
+- ✅ `clarificationOutOfStockMessage()` template baru di `lib/response-template.ts`
+- ✅ `get_orders` owner command (15th action) — `getActiveOrdersForOwner()` DB function
+- ✅ `parsePaymentStateIntent()` — fungsi terpisah untuk state `awaiting_payment` (bukan reuse confirmationParser)
+- ✅ `confirmationPendingMessage()` tampil ringkasan order (items + total)
+- ✅ `awaitingPaymentReminderMessage()` tampil order ID + total (fetch dari DB)
+- ✅ `cancel_order` intent actually cancels AWAITING_PAYMENT order (bukan hanya info)
+- ✅ Browse hardcoded "Olshop Kak Nina" → `${tenant.name}` dynamic
+- ✅ Multi-item order loss bug fix: `resolvedItems` (post-loop) bukan `clarification.resolved` snapshot
+- ✅ Owner confirmation bleeding fix: `parseConfirmationIntent(text, "owner")` — context param
+- ✅ `handoffCustomerMessage()` + `handoffOwnerAlertMessage()` templates (move hardcode dari handoff.ts)
+- ✅ `modifyOrderInConfirmationMessage()` + `modifyOrderHandoffMessage()` templates
 
 ### Fitur Baru (per 7 Juni 2026 sesi 2) ✅
 - ✅ `confirmationParser` fix: pesan dengan nama produk/kata "tambah" → selalu `ambiguous` (bukan `confirm`)
@@ -768,7 +794,31 @@ Wajib tambah **handler file** di `lib/handlers/` (satu file per intent besar).
 ❌ CONFIRM_KEYWORDS / CANCEL_KEYWORDS Set → DIHAPUS, pakai parseConfirmationIntent() dari lib/ai/confirmation-parser.ts
 ❌ extractNumber regex untuk clarification → DIHAPUS, pakai parseClarificationInput() dari lib/ai/confirmation-parser.ts
 ❌ lib/constants/confirmation-keywords.ts → FILE SUDAH DIHAPUS, jangan import lagi
+❌ Keyword matching untuk input apapun dari customer → SELALU pakai AI model (Gemini) untuk semua parsing
+❌ parseClarificationInput dengan candidateCount: number → signature lama, SUDAH DIGANTI ke candidates: Array<{name: string}>
+❌ parseClarificationInput return {choice, cancel} → return lama, SUDAH DIGANTI ke {choices: ClarificationChoice[], cancel}
+❌ parseConfirmationIntent(text) untuk owner confirm → WAJIB pass context "owner": parseConfirmationIntent(text, "owner"); tanpa context, PENTING rule (product name → ambiguous) bleeding ke owner flow
+❌ Owner Command count "11 action" atau "14 action" → sudah 15 action (tambah get_orders)
+❌ `getActiveOrdersForOwner` import langsung dari server/db/orders.ts → import dari @/server/db (via index.ts)
 ```
+
+### Prinsip Natural Language — NO KEYWORD MATCHING
+
+**WAssist harus bisa memahami pesan customer secara natural. Jangan pakai keyword/regex matching.**
+
+| Parsing | ❌ Jangan | ✅ Pakai |
+|---|---|---|
+| Konfirmasi/batal | `Set<string>` CONFIRM_KEYWORDS | `parseConfirmationIntent()` |
+| Jawaban clarification (varian/qty) | `parseInt`, `extractNumber` regex | `parseClarificationInput()` |
+| Intent pesan customer | `if (msg.includes("pesan"))` | `parseCustomerMessage()` |
+| Perintah owner | Manual string check | `parseOwnerCommand()` |
+
+**`parseClarificationInput` sekarang support:**
+- Angka: `"1"`, `"nomor 2"`
+- Nama produk: `"yang kulot"`, `"celana palazzo"`
+- Multi-select: `"kulot dan palazzo masing-masing 1"`
+- Kata ordinal: `"yang pertama"`, `"keduanya"`
+- Batal: `"gak jadi"`, `"batal"`
 
 ---
 

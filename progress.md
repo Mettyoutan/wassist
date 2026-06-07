@@ -7,7 +7,7 @@
 ## Status Umum
 - **Deadline submit:** 11 Juni 2026
 - **Target selesai:** 8 Juni 2026
-- **Last updated:** 7 Juni 2026
+- **Last updated:** 8 Juni 2026
 - **Build status:** ✅ 0 TypeScript error (`npm run build` clean)
 - **Deploy status:** ❌ Belum di-deploy ke Cloud Run (BLOCKER)
 
@@ -32,6 +32,15 @@
 - [x] Shipping address: `awaiting_address` state, address tersimpan di `orders.notes` ✅ 2026-06-07
 - [x] Saved address: `users.last_address` + confirm/new flow untuk returning customer ✅ 2026-06-07
 - [x] Fix: `confirmationParser` ambiguous untuk pesan dengan nama produk ✅ 2026-06-07
+- [x] Fix: owner confirmation bleeding — `parseConfirmationIntent(text, "owner")` context param ✅ 2026-06-08
+- [x] Fix: multi-item order loss — `resolvedItems` (post-loop) bukan `clarification.resolved` snapshot ✅ 2026-06-08
+- [x] Fix: browse hardcoded "Olshop Kak Nina" → `${tenant.name}` ✅ 2026-06-08
+- [x] Fix: `confirmationPendingMessage` tampil ringkasan order (items + total) ✅ 2026-06-08
+- [x] Fix: `awaitingPaymentReminderMessage` tampil order ID + total dari DB ✅ 2026-06-08
+- [x] Fix: `cancel_order` intent cancels AWAITING_PAYMENT order (bukan hanya info) ✅ 2026-06-08
+- [x] Feat: `get_orders` owner command (15th action) → `getActiveOrdersForOwner()` ✅ 2026-06-08
+- [x] Feat: `parsePaymentStateIntent()` — dedicated function untuk `awaiting_payment` state ✅ 2026-06-08
+- [x] Templates: `handoffCustomerMessage`, `handoffOwnerAlertMessage`, `modifyOrderInConfirmationMessage`, `modifyOrderHandoffMessage` ✅ 2026-06-08
 - [x] Owner `mark_paid` via WA — manual payment confirmation + stock decrement ✅ 2026-06-07
 - [x] Low-stock WA alert setelah PAID callback (Midtrans webhook) ✅ 2026-06-07
 - [x] QR resend: customer `awaiting_payment` + keyword check → kirim ulang QR ✅ 2026-06-07
@@ -206,6 +215,20 @@
 ---
 
 ## 📝 Catatan Sesi
+
+### 2026-06-08 (sesi 1) — UX chatbot fixes + get_orders + owner context
+- Fix: owner confirmation bleeding — `parseConfirmationIntent(text, "owner")` — context param, PENTING rule bypass untuk owner ✅ commit 92a7229
+- Fix: multi-item order loss — `resolvedItems` (post-loop) bukan `clarification.resolved` snapshot (silent bug — items setelah ambiguous item pertama hilang)
+- Fix: browse.ts hardcoded "Olshop Kak Nina" → `${tenant.name}` dynamic
+- Fix: `confirmationPendingMessage` sekarang pass `session.pending_order.items` + `total` → tampil ringkasan order
+- Fix: `awaitingPaymentReminderMessage` fetch order dari DB → tampil `midtrans_id` + `total_amount`
+- Fix: `cancel_order` intent — jika customer punya AWAITING_PAYMENT order → actually cancel (updateOrderStatus + clearSession), bukan hanya info
+- Feat: `get_orders` owner command (15th action) — `getActiveOrdersForOwner()` di `server/db/orders.ts` + exported via index.ts
+- Feat: `parsePaymentStateIntent()` — dedicated function di `lib/ai/confirmation-parser.ts` untuk parsing `awaiting_payment` state (resend_qr / cancel / other)
+- Feat: payment vocab di `confirmationParserModel` confirm signal (bayar/mau bayar/lanjut bayar) ✅ commit 6a5a559
+- Templates moved dari handoff.ts → response-template.ts: `handoffCustomerMessage`, `handoffOwnerAlertMessage`
+- Templates baru: `modifyOrderInConfirmationMessage`, `modifyOrderHandoffMessage`, `nonTextMessageResponse`, `ownerModifyOrderNotification`
+- Build ✅ 0 TypeScript error
 
 ### 2026-06-07 (sesi 2) — Plan 1 + Plan 2 (saved address)
 - Fix: `confirmationParserModel` systemInstruction — pesan dengan nama produk/kata "tambah" → return `ambiguous` (bukan `confirm`) ✅ commit c3d2e08
