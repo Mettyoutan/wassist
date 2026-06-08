@@ -18,6 +18,59 @@ export async function getActiveProducts(
   return data ?? [];
 }
 
+// Ambil meta_retailer_id produk pertama (untuk WA Catalog thumbnail_product_retailer_id).
+export async function getFirstProductRetailerId(
+  tenantId: string
+): Promise<string | null> {
+  const { data, error } = await supabaseAdmin
+    .from("products")
+    .select("meta_retailer_id")
+    .eq("tenant_id", tenantId)
+    .eq("is_active", true)
+    .not("meta_retailer_id", "is", null)
+    .order("name", { ascending: true })
+    .limit(1)
+    .single();
+
+  if (error) return null;
+  return data?.meta_retailer_id ?? null;
+}
+
+// Untuk tampilan browse dengan category grouping — BUKAN untuk Gemini prompt (gunakan getActiveProducts).
+export async function getActiveProductsRich(
+  tenantId: string
+): Promise<Pick<DbProduct, "name" | "price" | "unit" | "category" | "description">[]> {
+  const { data, error } = await supabaseAdmin
+    .from("products")
+    .select("name, price, unit, category, description")
+    .eq("tenant_id", tenantId)
+    .eq("is_active", true)
+    .order("name", { ascending: true });
+
+  if (error) console.error("[DB] getActiveProductsRich:", error.message);
+  return data ?? [];
+}
+
+// Ambil detail lengkap produk untuk product_detail intent (gambar, deskripsi, stok).
+export async function getProductDetailByName(
+  tenantId: string,
+  name: string
+): Promise<Pick<DbProduct, "id" | "name" | "price" | "stock" | "unit" | "description" | "image_url"> | null> {
+  const { data, error } = await supabaseAdmin
+    .from("products")
+    .select("id, name, price, stock, unit, description, image_url")
+    .eq("tenant_id", tenantId)
+    .eq("name", name)
+    .eq("is_active", true)
+    .single();
+
+  if (error) {
+    if (error.code !== "PGRST116") console.error("[DB] getProductDetailByName:", error.message);
+    return null;
+  }
+  return data;
+}
+
 // Resolve nama produk ke detail DB untuk validasi stok + snapshot harga order.
 // price dari sini (bukan dari getActiveProducts) → price_at_order selalu fresh dari DB.
 export async function getProductByName(

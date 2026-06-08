@@ -44,6 +44,7 @@ import { processOrderConfirmation }    from "@/lib/handlers/confirm-order";
 import { handleCartOrder }               from "@/lib/handlers/cart-order";
 import { handleOwnerCommand }            from "@/lib/handlers/owner";
 import { handleRepeatLastIntent }        from "@/lib/handlers/repeat-last";
+import { handleProductDetailIntent }     from "@/lib/handlers/product-detail";
 import { suggestClosestProduct }         from "@/lib/ai/product-suggester";
 import type { DbTenant }                 from "@/lib/types/db";
 import type { WAWebhookBody, WAMessage,
@@ -371,6 +372,10 @@ export async function POST(request: NextRequest) {
 
       case "repeat_last":
         await handleRepeatLastIntent(tenant, senderPhone, session);
+        break;
+
+      case "product_detail":
+        await handleProductDetailIntent(tenant, senderPhone, products, parsed.items[0]?.product_index ?? 0);
         break;
 
       case "cancel_order": {

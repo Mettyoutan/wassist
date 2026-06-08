@@ -26,6 +26,7 @@ INTENT (pilih tepat satu):
 - order_status  : tanya status / tracking pesanan
 - modify_order  : ubah pesanan yang sedang berlangsung
 - cancel_order  : batalkan pesanan
+- product_detail: ingin lihat detail / foto / deskripsi / ukuran / info satu produk tertentu
 - greeting      : sapaan atau pesan pembuka tanpa intent belanja (halo, hi, selamat pagi, dll)
 - low_confidence: pesan tidak jelas atau di luar konteks belanja
 
@@ -48,7 +49,7 @@ ATURAN OUTPUT:
         intent: {
           type: SchemaType.STRING,
           format: "enum",
-          enum: ["order_new", "browse", "repeat_last", "order_status", "modify_order", "cancel_order", "greeting", "low_confidence"],
+          enum: ["order_new", "browse", "repeat_last", "order_status", "modify_order", "cancel_order", "product_detail", "greeting", "low_confidence"],
         },
         items: {
           type: SchemaType.ARRAY,

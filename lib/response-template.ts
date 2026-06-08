@@ -384,3 +384,34 @@ export function ownerNoOrderForPaidMessage(): string {
 export function ownerPaymentReceivedMessage(orderId: string, total: number): string {
   return `💰 *Pembayaran masuk!*\nOrder: ${orderId}\nTotal: *Rp${total.toLocaleString("id-ID")}*`;
 }
+
+export function productDetailMessage(
+  name: string,
+  price: number,
+  unit: string,
+  stock: number,
+  description: string | null | undefined
+): string {
+  const desc      = description ? `\n\n📝 ${description}` : "";
+  const stockInfo = stock > 0
+    ? `✅ Stok tersedia: ${stock} ${unit}`
+    : "❌ Stok habis";
+  return `*${name}*\n💰 Rp${price.toLocaleString("id-ID")}/${unit}\n${stockInfo}${desc}\n\nMau order? Ketik:\n*${name} [jumlah]*`;
+}
+
+export function productBrowseMessage(
+  storeName: string,
+  grouped: Record<string, Array<{ name: string; price: number; unit: string }>>
+): string {
+  const lines: string[] = [`Koleksi *${storeName}* 😊\n`];
+  for (const [category, products] of Object.entries(grouped)) {
+    lines.push(`*${category.toUpperCase()}*`);
+    for (const p of products) {
+      lines.push(`• ${p.name} — Rp${p.price.toLocaleString("id-ID")}/${p.unit}`);
+    }
+    lines.push("");
+  }
+  lines.push("📸 Ketik *detail [nama produk]* untuk foto & info lengkap.");
+  lines.push("🛍️ Order: *[nama produk] [ukuran] [jumlah]*, contoh: *Kaos Oversize M 2*");
+  return lines.join("\n").trim();
+}
