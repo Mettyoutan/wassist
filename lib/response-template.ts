@@ -302,6 +302,10 @@ export function sessionExpiredMessage(): string {
   );
 }
 
+export function sessionRenewedMessage(): string {
+  return `Halo lagi kak! 👋 Sesi sebelumnya sudah habis, tapi bot siap bantu lagi 😊`;
+}
+
 export function pendingPaymentReminderMessage(displayId: string): string {
   return (
     `Kak, kamu masih punya pesanan yang belum dibayar 💳\n\n` +

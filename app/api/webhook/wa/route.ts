@@ -29,6 +29,7 @@ import { greetingMessage,
          qrPaymentCaption,
          qrResendFailedMessage,
          sessionExpiredMessage,
+         sessionRenewedMessage,
          pendingPaymentReminderMessage,
          orderCancelledMessage,
          awaitingPaymentReminderMessage,
@@ -115,8 +116,8 @@ export async function POST(request: NextRequest) {
     // Check for expired session BEFORE getSession resets it
     const { wasActive } = peekExpiredSession(tenant.id, senderPhone);
     if (wasActive) {
-      await sendWhatsAppMessage(senderPhone, sessionExpiredMessage());
-      return NextResponse.json({ status: "ok" });
+      await sendWhatsAppMessage(senderPhone, sessionRenewedMessage());
+      // no return — continue processing user's message
     }
 
     // Get current session
