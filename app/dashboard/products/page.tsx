@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import StatusBadge from "@/components/dashboard/StatusBadge";
+import Toast from "@/components/dashboard/Toast";
 
 interface Product {
   id: string;
@@ -22,6 +23,13 @@ export default function StockManagement() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"stok" | "katalog">("stok");
   
+  const [toast, setToast] = useState<{ message: string; type: "success" | "danger" | "warning" } | null>(null);
+
+  const showToast = (message: string, type: "success" | "danger" | "warning" = "success") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
   // Modal states
   const [showModal, setShowModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -91,11 +99,13 @@ export default function StockManagement() {
       });
       if (res.ok) {
         setProducts((prev) => prev.filter((p) => p.id !== id));
+        showToast("Produk dihapus dari katalog");
       } else {
-        alert("Gagal menghapus produk");
+        showToast("Gagal menghapus produk", "danger");
       }
     } catch (err) {
       console.error("[Products CRUD] delete error:", err);
+      showToast("Gagal menghapus produk", "danger");
     }
   };
 
@@ -124,8 +134,9 @@ export default function StockManagement() {
         if (res.ok) {
           setShowModal(false);
           fetchProducts();
+          showToast("Produk berhasil diperbarui ✓");
         } else {
-          alert("Gagal memperbarui produk");
+          showToast("Gagal memperbarui produk", "danger");
         }
       } else {
         // Create
@@ -137,8 +148,9 @@ export default function StockManagement() {
         if (res.ok) {
           setShowModal(false);
           fetchProducts();
+          showToast("Produk baru berhasil ditambahkan ✓");
         } else {
-          alert("Gagal membuat produk baru");
+          showToast("Gagal membuat produk baru", "danger");
         }
       }
     } catch (err) {
@@ -507,6 +519,12 @@ export default function StockManagement() {
           </div>
         </div>
       )}
+      <Toast
+        message={toast?.message ?? ""}
+        type={toast?.type ?? "success"}
+        visible={!!toast}
+        onHide={() => setToast(null)}
+      />
     </div>
   );
 }

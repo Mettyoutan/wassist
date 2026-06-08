@@ -1,6 +1,7 @@
 "use client";
 
 import OrderAccordion from "@/components/dashboard/OrderAccordion";
+import Toast from "@/components/dashboard/Toast";
 import { useState, useEffect, useCallback } from "react";
 
 type Status = "pending" | "diproses" | "selesai" | "batal";
@@ -21,6 +22,12 @@ export default function OrderManagement() {
   const [orders, setOrders] = useState<OrderDetail[]>([]);
   const [activeTab, setActiveTab] = useState<FilterTab>("diproses");
   const [loading, setLoading] = useState(true);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "danger" | "warning" } | null>(null);
+
+  const showToast = (message: string, type: "success" | "danger" | "warning" = "success") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -48,13 +55,13 @@ export default function OrderManagement() {
         body: JSON.stringify({ action: "finish" }),
       });
       setOrders((prev) =>
-
-        
         prev.map((o) => (o.id === id ? { ...o, status: "selesai" as const } : o))
       );
       setActiveTab("selesai");
+      showToast("Pesanan berhasil diselesaikan ✓");
     } catch (err) {
       console.error("[Orders] finishHandler error:", err);
+      showToast("Gagal menyelesaikan pesanan", "danger");
     }
   };
 
@@ -69,8 +76,10 @@ export default function OrderManagement() {
         prev.map((o) => (o.id === id ? { ...o, status: "batal" as const } : o))
       );
       setActiveTab("batal");
+      showToast("Pesanan dibatalkan", "warning");
     } catch (err) {
       console.error("[Orders] cancelHandler error:", err);
+      showToast("Gagal membatalkan pesanan", "danger");
     }
   };
 
@@ -139,14 +148,6 @@ export default function OrderManagement() {
                   <small className="fw-semibold" style={{ fontSize: "10px", color: "var(--color-status-danger-text)" }}>Batal</small>
                 </div>
               </div>
-              <div className="col-3">
-                <div className="rounded-3 py-2" style={{ background: "#cdd7d0" }}>
-                  <div className="fw-bold text-secondary" style={{ fontSize: "20px" }}>    
-                    {statusCount.batal}
-                  </div>
-                  <small className="text-secondary">Batal</small>
-                </div>
-              </div>
             </div>
 
             <div className="fw-semibold mb-2 mt-4" style={{ fontSize: "14px" }}>
@@ -179,6 +180,12 @@ export default function OrderManagement() {
           </>
         )}
       </div>
+      <Toast
+        message={toast?.message ?? ""}
+        type={toast?.type ?? "success"}
+        visible={!!toast}
+        onHide={() => setToast(null)}
+      />
     </div>
   );
 }
