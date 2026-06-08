@@ -12,6 +12,11 @@ type KpiData = {
   pendingCount: number;
   topProducts: Array<{ name: string; unit: string; qtySold: number; revenue: number }>;
   lowStockProducts: Array<{ name: string; unit: string; stock: number; reorderPoint: number }>;
+  trendPoints: Array<{ label: string; revenue: number }>;
+  qrisCount: number;
+  manualCount: number;
+  uniqueCustomers: number;
+  repeatCustomers: number;
 };
 
 const PERIOD_LABELS: Record<Period, string> = {
@@ -34,31 +39,32 @@ export default function AnalyticsView() {
       .finally(() => setLoading(false));
   }, [period]);
 
-  // Dynamic values helper based on period selected
-  const getTrendData = () => {
-    const rev = kpi?.totalRevenue ?? 100000;
-    if (period === "hari ini") {
-      return {
-        points: `10,80 50,70 90,75 130,50 170,40 210,65 250,30 290,35 330,10`,
-        labels: ["08:00", "10:00", "12:00", "14:00", "16:00", "18:00", "20:00"],
-        insight: "Pesanan melonjak pada makan siang jam 12:00 & makan malam jam 18:00!",
-      };
-    } else if (period === "minggu") {
-      return {
-        points: `10,75 50,70 90,65 130,25 170,45 210,15 250,10`,
-        labels: ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"],
-        insight: "Penjualan melonjak tajam pada hari Rabu & Sabtu! Bundling makanan + es teh manis sukses.",
-      };
-    } else {
-      return {
-        points: `10,80 80,60 150,45 220,20 290,15`,
-        labels: ["Minggu 1", "Minggu 2", "Minggu 3", "Minggu 4"],
-        insight: "Pertumbuhan omzet bulanan konsisten di 12.5% dibanding bulan lalu.",
-      };
-    }
+  const buildSvgPoints = (trendPoints: Array<{ label: string; revenue: number }>) => {
+    const n = trendPoints.length;
+    if (n === 0) return { points: "10,90 330,90", labels: [] as string[] };
+    const maxRev = Math.max(...trendPoints.map((t) => t.revenue), 1);
+    const svgPoints = trendPoints
+      .map((t, i) => {
+        const x = 10 + i * (320 / Math.max(n - 1, 1));
+        const y = 90 - (t.revenue / maxRev) * 80;
+        return `${Math.round(x)},${Math.round(y)}`;
+      })
+      .join(" ");
+    return { points: svgPoints, labels: trendPoints.map((t) => t.label) };
   };
 
-  const trend = getTrendData();
+  const buildInsight = (kpi: KpiData | null): string => {
+    if (!kpi || kpi.orderCount === 0)
+      return "Belum ada transaksi di periode ini. Bot WA siap menerima pesanan pelanggan!";
+    if (kpi.topProducts.length > 0) {
+      const top = kpi.topProducts[0];
+      return `Produk terlaris: ${top.name} — ${top.qtySold} ${top.unit} terjual (Rp ${top.revenue.toLocaleString("id-ID")}). AOV periode ini Rp ${kpi.aov.toLocaleString("id-ID")}.`;
+    }
+    return `${kpi.orderCount} transaksi diproses otomatis oleh bot WA periode ini.`;
+  };
+
+  const svgTrend = buildSvgPoints(kpi?.trendPoints ?? []);
+  const insight = buildInsight(kpi);
 
   return (
     <div className="pb-4">
@@ -145,12 +151,12 @@ export default function AnalyticsView() {
                   </defs>
                   
                   {/* Fill area */}
-                  <path 
-                    d={`M 10,95 L ${trend.points} L 330,95 Z`} 
+                  <path
+                    d={`M 10,95 L ${svgTrend.points} L 330,95 Z`}
                     fill="url(#chart-grad)"
                     stroke="none"
                   />
-                  
+
                   {/* Graph line */}
                   <polyline
                     fill="none"
@@ -158,13 +164,13 @@ export default function AnalyticsView() {
                     strokeWidth="3.5"
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    points={trend.points}
+                    points={svgTrend.points}
                   />
                 </svg>
                 
                 {/* Chart labels */}
                 <div className="d-flex justify-content-between w-100 px-1 mt-2 text-muted" style={{ fontSize: "9px" }}>
-                  {trend.labels.map((lbl, idx) => (
+                  {svgTrend.labels.map((lbl, idx) => (
                     <span key={idx}>{lbl}</span>
                   ))}
                 </div>
@@ -175,7 +181,7 @@ export default function AnalyticsView() {
                 <span className="fs-5" style={{ lineHeight: 1 }}>✨</span>
                 <div>
                   <span className="fw-bold d-block mb-0.5">Insight AI WAssist:</span>
-                  {trend.insight}
+                  {insight}
                 </div>
               </div>
             </div>
@@ -192,8 +198,8 @@ export default function AnalyticsView() {
               ) : (
                 <div className="d-flex flex-column gap-3">
                   {(kpi?.topProducts ?? []).map((p, i) => {
-                    // calculate dynamic width percentage based on rank
-                    const percentage = i === 0 ? 100 : i === 1 ? 80 : 60;
+                    const maxRev = kpi?.topProducts[0]?.revenue ?? 1;
+                    const percentage = maxRev > 0 ? Math.round((p.revenue / maxRev) * 100) : 60;
                     return (
                       <div key={p.name} style={{ fontSize: "12px" }}>
                         <div className="d-flex justify-content-between align-items-center mb-1">
@@ -228,10 +234,34 @@ export default function AnalyticsView() {
               <div className="fw-bold text-dark mb-2.5" style={{ fontSize: "13px" }}>Efektivitas Asisten AI Gemini</div>
               <div className="row g-2">
                 {[
-                  { title: "Chat Terjawab Otomatis", value: "1.240 Chat", desc: "98% tanpa campur tangan owner", icon: "bi-chat-left-dots-fill", color: "var(--color-primary)" },
-                  { title: "Waktu yang Dihemat", value: "12 Jam", desc: "Dialokasikan kembali ke dapur", icon: "bi-clock-fill", color: "var(--color-blue)" },
-                  { title: "Tingkat Konversi", value: "25%", desc: "Chat diubah menjadi order lunas", icon: "bi-percent", color: "var(--color-warning)" },
-                  { title: "Progres Terintegrasi", value: "100%", desc: "Semua pesanan lunas masuk DB", icon: "bi-check-circle-fill", color: "var(--color-accent)" },
+                  {
+                    title: "Pesanan Diproses Bot",
+                    value: `${kpi?.orderCount ?? 0} Order`,
+                    desc: "100% otomatis via WA — tanpa campur tangan manual",
+                    icon: "bi-chat-left-dots-fill",
+                    color: "var(--color-primary)",
+                  },
+                  {
+                    title: "Estimasi Waktu Dihemat",
+                    value: `${(kpi?.orderCount ?? 0) * 5} Menit`,
+                    desc: "~5 mnt per order — bisa fokus ke produksi",
+                    icon: "bi-clock-fill",
+                    color: "var(--color-blue)",
+                  },
+                  {
+                    title: "Rata-rata per Transaksi",
+                    value: `Rp ${(kpi?.aov ?? 0).toLocaleString("id-ID")}`,
+                    desc: "Average Order Value periode ini",
+                    icon: "bi-receipt",
+                    color: "var(--color-warning)",
+                  },
+                  {
+                    title: "Efisiensi Channel",
+                    value: "100% WA",
+                    desc: "Semua pesanan masuk via WhatsApp",
+                    icon: "bi-check-circle-fill",
+                    color: "var(--color-accent)",
+                  },
                 ].map((item, index) => (
                   <div key={index} className="col-6">
                     <div className="p-2.5 rounded-3 h-100 bg-light" style={{ border: "1px solid var(--color-border)" }}>
@@ -252,56 +282,38 @@ export default function AnalyticsView() {
           <div className="card border-0 shadow-sm" style={{ borderRadius: "14px" }}>
             <div className="card-body p-3">
               <div className="fw-bold text-dark mb-3" style={{ fontSize: "13px" }}>Metode Pembayaran Terfavorit</div>
-              <div className="d-flex align-items-center justify-content-around">
-                
-                {/* SVG Donut Circle */}
-                <div className="position-relative" style={{ width: "80px", height: "80px" }}>
-                  <svg width="80" height="80" viewBox="0 0 36 36" style={{ transform: "rotate(-90deg)" }}>
-                    {/* Background grey circle */}
-                    <circle cx="18" cy="18" r="15.915" fill="none" stroke="var(--color-border)" strokeWidth="4" />
-                    
-                    {/* Transfer manual: 30% segment */}
-                    <circle 
-                      cx="18" 
-                      cy="18" 
-                      r="15.915" 
-                      fill="none" 
-                      stroke="var(--color-blue)" 
-                      strokeWidth="4.2" 
-                      strokeDasharray="30 70" 
-                      strokeDashoffset="0"
-                    />
-
-                    {/* QRIS: 70% segment */}
-                    <circle 
-                      cx="18" 
-                      cy="18" 
-                      r="15.915" 
-                      fill="none" 
-                      stroke="var(--color-accent)" 
-                      strokeWidth="4.2" 
-                      strokeDasharray="70 30" 
-                      strokeDashoffset="-30"
-                    />
-                  </svg>
-                  <div className="position-absolute top-50 start-50 translate-middle text-center">
-                    <span className="fw-bold text-dark" style={{ fontSize: "12px" }}>70%</span>
-                    <span className="text-muted d-block" style={{ fontSize: "6px" }}>QRIS</span>
+              {(() => {
+                const total = Math.max((kpi?.orderCount ?? 0), 1);
+                const qrisPct = Math.round(((kpi?.qrisCount ?? 0) / total) * 100);
+                const manualPct = 100 - qrisPct;
+                return (
+                  <div className="d-flex align-items-center justify-content-around">
+                    <div className="position-relative" style={{ width: "80px", height: "80px" }}>
+                      <svg width="80" height="80" viewBox="0 0 36 36" style={{ transform: "rotate(-90deg)" }}>
+                        <circle cx="18" cy="18" r="15.915" fill="none" stroke="var(--color-border)" strokeWidth="4" />
+                        <circle cx="18" cy="18" r="15.915" fill="none" stroke="var(--color-blue)"
+                          strokeWidth="4.2" strokeDasharray={`${manualPct} ${qrisPct}`} strokeDashoffset="0" />
+                        <circle cx="18" cy="18" r="15.915" fill="none" stroke="var(--color-accent)"
+                          strokeWidth="4.2" strokeDasharray={`${qrisPct} ${manualPct}`} strokeDashoffset={`-${manualPct}`} />
+                      </svg>
+                      <div className="position-absolute top-50 start-50 translate-middle text-center">
+                        <span className="fw-bold text-dark" style={{ fontSize: "12px" }}>{qrisPct}%</span>
+                        <span className="text-muted d-block" style={{ fontSize: "6px" }}>QRIS</span>
+                      </div>
+                    </div>
+                    <div className="d-flex flex-column gap-2" style={{ fontSize: "11px" }}>
+                      <div className="d-flex align-items-center gap-2">
+                        <span style={{ display: "inline-block", width: "10px", height: "10px", borderRadius: "50%", background: "var(--color-accent)" }}></span>
+                        <span className="fw-semibold text-dark">QRIS (Otomatis): {qrisPct}%</span>
+                      </div>
+                      <div className="d-flex align-items-center gap-2">
+                        <span style={{ display: "inline-block", width: "10px", height: "10px", borderRadius: "50%", background: "var(--color-blue)" }}></span>
+                        <span className="text-muted">Transfer Manual: {manualPct}%</span>
+                      </div>
+                    </div>
                   </div>
-                </div>
-
-                {/* Legend */}
-                <div className="d-flex flex-column gap-2" style={{ fontSize: "11px" }}>
-                  <div className="d-flex align-items-center gap-2">
-                    <span style={{ display: "inline-block", width: "10px", height: "10px", borderRadius: "50%", background: "var(--color-accent)" }}></span>
-                    <span className="fw-semibold text-dark">QRIS (Otomatis): 70%</span>
-                  </div>
-                  <div className="d-flex align-items-center gap-2">
-                    <span style={{ display: "inline-block", width: "10px", height: "10px", borderRadius: "50%", background: "var(--color-blue)" }}></span>
-                    <span className="text-muted">Transfer Manual: 30%</span>
-                  </div>
-                </div>
-              </div>
+                );
+              })()}
             </div>
           </div>
 
@@ -309,46 +321,43 @@ export default function AnalyticsView() {
           <div className="card border-0 shadow-sm" style={{ borderRadius: "14px" }}>
             <div className="card-body p-3">
               <div className="fw-bold text-dark mb-3" style={{ fontSize: "13px" }}>Tingkat Loyalitas Pelanggan</div>
-              <div className="d-flex align-items-center justify-content-around">
-                
-                {/* SVG Gauge */}
-                <div className="position-relative" style={{ width: "80px", height: "80px" }}>
-                  <svg width="80" height="80" viewBox="0 0 36 36">
-                    <circle cx="18" cy="18" r="15.915" fill="none" stroke="#f0f2f5" strokeWidth="3.5" />
-                    <circle 
-                      cx="18" 
-                      cy="18" 
-                      r="15.915" 
-                      fill="none" 
-                      stroke="var(--color-primary)" 
-                      strokeWidth="3.8" 
-                      strokeDasharray="30 70" 
-                      strokeDashoffset="25"
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                  <div className="position-absolute top-50 start-50 translate-middle text-center">
-                    <span className="fw-bold text-dark" style={{ fontSize: "12px" }}>30%</span>
-                    <span className="text-muted d-block" style={{ fontSize: "6px" }}>Repeat</span>
+              {(() => {
+                const unique = kpi?.uniqueCustomers ?? 0;
+                const repeat = kpi?.repeatCustomers ?? 0;
+                const repeatPct = unique > 0 ? Math.round((repeat / unique) * 100) : 0;
+                return (
+                  <div className="d-flex align-items-center justify-content-around">
+                    <div className="position-relative" style={{ width: "80px", height: "80px" }}>
+                      <svg width="80" height="80" viewBox="0 0 36 36">
+                        <circle cx="18" cy="18" r="15.915" fill="none" stroke="#f0f2f5" strokeWidth="3.5" />
+                        <circle cx="18" cy="18" r="15.915" fill="none" stroke="var(--color-primary)"
+                          strokeWidth="3.8"
+                          strokeDasharray={`${repeatPct} ${100 - repeatPct}`}
+                          strokeDashoffset="25"
+                          strokeLinecap="round" />
+                      </svg>
+                      <div className="position-absolute top-50 start-50 translate-middle text-center">
+                        <span className="fw-bold text-dark" style={{ fontSize: "12px" }}>{repeatPct}%</span>
+                        <span className="text-muted d-block" style={{ fontSize: "6px" }}>Repeat</span>
+                      </div>
+                    </div>
+                    <div className="d-flex flex-column gap-1.5" style={{ fontSize: "10px" }}>
+                      <div className="d-flex justify-content-between gap-5 align-items-center">
+                        <span className="text-muted">Total pelanggan unik:</span>
+                        <span className="fw-bold text-dark">{unique}</span>
+                      </div>
+                      <div className="d-flex justify-content-between gap-5 align-items-center">
+                        <span className="text-muted">Pelanggan repeat order:</span>
+                        <span className="fw-bold text-dark">{repeat}</span>
+                      </div>
+                      <div className="d-flex justify-content-between gap-5 align-items-center">
+                        <span className="text-muted">Tingkat repeat (2+ order):</span>
+                        <span className="fw-bold text-dark">{repeatPct}%</span>
+                      </div>
+                    </div>
                   </div>
-                </div>
-
-                {/* Submetrics list */}
-                <div className="d-flex flex-column gap-1.5" style={{ fontSize: "10px" }}>
-                  <div className="d-flex justify-content-between gap-5 align-items-center">
-                    <span className="text-muted">Interaksi Chat aktif:</span>
-                    <span className="fw-bold text-dark">70%</span>
-                  </div>
-                  <div className="d-flex justify-content-between gap-5 align-items-center">
-                    <span className="text-muted">Melakukan Repeat Order:</span>
-                    <span className="fw-bold text-dark">45%</span>
-                  </div>
-                  <div className="d-flex justify-content-between gap-5 align-items-center">
-                    <span className="text-muted">Pelanggan Setia (2+ beli):</span>
-                    <span className="fw-bold text-dark">30%</span>
-                  </div>
-                </div>
-              </div>
+                );
+              })()}
             </div>
           </div>
 
