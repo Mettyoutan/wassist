@@ -12,6 +12,7 @@ export default function CreateProduct() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [preview, setPreview] = useState<string | null>(null)
+  const [imageFile, setImageFile] = useState<File | null>(null)
 
   const [form, setForm] = useState({
     name: '',
@@ -26,8 +27,8 @@ export default function CreateProduct() {
   const handleImage = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    const url = URL.createObjectURL(file)
-    setPreview(url)
+    setImageFile(file)
+    setPreview(URL.createObjectURL(file))
   }
 
   const validate = () => {
@@ -44,6 +45,20 @@ export default function CreateProduct() {
 
     setLoading(true)
     try {
+      let image_url = ""
+      if (imageFile) {
+        const fd = new FormData()
+        fd.append("file", imageFile)
+        const uploadRes = await fetch("/api/products/upload-image", {
+          method: "POST",
+          body: fd,
+        })
+        if (uploadRes.ok) {
+          const { url } = await uploadRes.json()
+          image_url = url
+        }
+      }
+
       await fetch("/api/products", {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -53,6 +68,7 @@ export default function CreateProduct() {
           price:       Number(form.price),
           stock:       Number(form.stock) || 0,
           category:    form.category || null,
+          image_url,
         }),
       })
       router.push('/dashboard/products')

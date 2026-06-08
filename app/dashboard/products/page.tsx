@@ -43,6 +43,8 @@ export default function StockManagement() {
     category: "",
     description: "",
   });
+  const [modalImageFile, setModalImageFile] = useState<File | null>(null)
+  const [modalPreview, setModalPreview] = useState<string | null>(null)
 
   async function fetchProducts() {
     try {
@@ -72,6 +74,9 @@ export default function StockManagement() {
       category: "",
       description: "",
     });
+    setModalImageFile(null);
+    if (modalPreview?.startsWith("blob:")) URL.revokeObjectURL(modalPreview);
+    setModalPreview(null);
     setShowModal(true);
   };
 
@@ -87,7 +92,18 @@ export default function StockManagement() {
       category: product.category ?? "",
       description: product.description ?? "",
     });
+    setModalImageFile(null);
+    if (modalPreview?.startsWith("blob:")) URL.revokeObjectURL(modalPreview);
+    setModalPreview(product.image || null);
     setShowModal(true);
+  };
+
+  const handleModalImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (modalPreview?.startsWith("blob:")) URL.revokeObjectURL(modalPreview);
+    setModalImageFile(file);
+    setModalPreview(URL.createObjectURL(file));
   };
 
   const handleDelete = async (id: string) => {
@@ -112,20 +128,35 @@ export default function StockManagement() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    let finalImageUrl = formData.image_url;
+    if (modalImageFile) {
+      const fd = new FormData();
+      fd.append("file", modalImageFile);
+      const uploadRes = await fetch("/api/products/upload-image", {
+        method: "POST",
+        body: fd,
+      });
+      if (!uploadRes.ok) {
+        showToast("Gagal upload foto. Coba lagi.", "danger");
+        return;
+      }
+      const { url } = await uploadRes.json();
+      finalImageUrl = url;
+    }
+
     const payload = {
       name: formData.name,
       price: Number(formData.price),
       stock: Number(formData.stock),
       unit: formData.unit,
       reorder_point: Number(formData.reorder_point),
-      image_url: formData.image_url,
+      image_url: finalImageUrl,
       category: formData.category,
       description: formData.description,
     };
 
     try {
       if (editingProduct) {
-        // Update
         const res = await fetch(`/api/products/${editingProduct.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -133,13 +164,14 @@ export default function StockManagement() {
         });
         if (res.ok) {
           setShowModal(false);
+          setModalImageFile(null);
+          setModalPreview(null);
           fetchProducts();
           showToast("Produk berhasil diperbarui ✓");
         } else {
           showToast("Gagal memperbarui produk", "danger");
         }
       } else {
-        // Create
         const res = await fetch("/api/products", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -147,6 +179,8 @@ export default function StockManagement() {
         });
         if (res.ok) {
           setShowModal(false);
+          setModalImageFile(null);
+          setModalPreview(null);
           fetchProducts();
           showToast("Produk baru berhasil ditambahkan ✓");
         } else {
@@ -481,15 +515,34 @@ export default function StockManagement() {
                 </div>
 
                 <div>
-                  <label className="form-label text-muted mb-1" style={{ fontSize: "10px" }}>Link Gambar Produk</label>
-                  <input 
-                    type="text" 
-                    className="form-control form-control-sm"
-                    placeholder="https://example.com/image.png"
-                    value={formData.image_url}
-                    onChange={(e) => setFormData({ ...formData, image_url: e.target.value })}
-                    style={{ fontSize: "12px", borderRadius: "8px" }}
-                  />
+                  <label className="form-label text-muted mb-1" style={{ fontSize: "10px" }}>Foto Produk</label>
+                  <label style={{ cursor: "pointer", display: "block" }}>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="d-none"
+                      onChange={handleModalImage}
+                    />
+                    {modalPreview ? (
+                      <div className="position-relative rounded-3 overflow-hidden" style={{ height: "80px" }}>
+                        <img src={modalPreview} alt="preview" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        <div
+                          className="position-absolute d-flex align-items-center justify-content-center text-white fw-medium"
+                          style={{ inset: 0, background: "rgba(0,0,0,0.35)", fontSize: "11px" }}
+                        >
+                          Ganti foto
+                        </div>
+                      </div>
+                    ) : (
+                      <div
+                        className="rounded-3 d-flex flex-column align-items-center justify-content-center gap-1 text-muted"
+                        style={{ border: "2px dashed #dee2e6", height: "64px", fontSize: "11px", background: "#f8f9fa" }}
+                      >
+                        <span style={{ fontSize: "18px" }}>📷</span>
+                        <span>Tap untuk upload foto</span>
+                      </div>
+                    )}
+                  </label>
                 </div>
 
                 <div className="d-flex gap-2 mt-3">
