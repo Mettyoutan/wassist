@@ -64,12 +64,24 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 }
 
+// Dedup: cegah double-processing saat Meta retry webhook (timeout >20s)
+const _processedMsgIds = new Set<string>();
+const _msgIdTs         = new Map<string, number>();
+const MSG_ID_TTL       = 5 * 60 * 1000; // 5 menit
+
+function cleanupMsgIds() {
+  const now = Date.now();
+  for (const [id, ts] of _msgIdTs) {
+    if (now - ts > MSG_ID_TTL) { _processedMsgIds.delete(id); _msgIdTs.delete(id); }
+  }
+}
+
 // Cleanup setiap 50 request — cegah memory leak tanpa overhead per-request
 let _reqCount = 0;
 
 // ─── POST: Semua pesan masuk dari Meta ───────────────────────────────────────
 export async function POST(request: NextRequest) {
-  if (++_reqCount % 50 === 0) cleanupExpiredSessions();
+  if (++_reqCount % 50 === 0) { cleanupExpiredSessions(); cleanupMsgIds(); }
   try {
     const body  = (await request.json()) as WAWebhookBody;
     const value = body.entry?.[0]?.changes?.[0]?.value;
@@ -82,6 +94,13 @@ export async function POST(request: NextRequest) {
     const phoneNumberId: string = value.metadata.phone_number_id;
     const message: WAMessage    = value.messages[0];
     const senderPhone: string   = message.from;
+
+    // ── Dedup: skip jika message sudah diproses (Meta retry) ─────────────────
+    if (_processedMsgIds.has(message.id)) {
+      return NextResponse.json({ status: "ok" });
+    }
+    _processedMsgIds.add(message.id);
+    _msgIdTs.set(message.id, Date.now());
 
     // ── Lookup tenant ────────────────────────────────────────────────────────
     const tenant = await getTenantByWaPhoneId(phoneNumberId);
