@@ -549,6 +549,8 @@ const product = await getProductByRetailerId(tenant.id, cartItem.product_retaile
 | QR resend (awaiting_payment) | ✅ | `app/api/webhook/wa/route.ts` + `getMidtransQrString` |
 | Session expiry UX message | ✅ | `lib/session.ts` → `peekExpiredSession` |
 | Concurrent order guard | ✅ | `case "order_new"` guard in `app/api/webhook/wa/route.ts` |
+| Product image upload (Supabase Storage) | ✅ | `app/api/products/upload-image/route.ts`, file picker di create + edit modal |
+| Analytics real data | ✅ | `server/db/analytics.ts` + `components/dashboard/AnalyticsView.tsx` |
 | modify_order | ❌ post-MVP → handoff | — |
 
 ---
@@ -595,11 +597,17 @@ const product = await getProductByRetailerId(tenant.id, cartItem.product_retaile
 - [ ] End-to-end test bot dari WA real device via ngrok
 
 ### Nice-to-have
-- [ ] Toast notifications untuk aksi (finish order)
 - [ ] Empty states saat data kosong
 - [ ] `GET /api/orders/[id]` — masih 501
-- [ ] Upload product images ke Supabase Storage
 - [ ] KPI `change` prop (perbandingan periode)
+
+### Sudah selesai (per 9 Juni 2026)
+- ✅ Toast notifications untuk aksi (finish order, update produk)
+- ✅ Upload product images ke Supabase Storage (bucket `product-images`, file picker + preview)
+- ✅ Analytics page real data: trend SVG, insight bubble, payment split donut, loyalty gauge
+- ✅ `GET /api/products/[id]` — live DB
+- ✅ `PATCH /api/orders/[id]` — try-catch aman
+- ✅ Account page baca data tenant real dari DB
 
 ### Post-Hackathon
 - Auth Opsi B: magic link JWT via `jose`
