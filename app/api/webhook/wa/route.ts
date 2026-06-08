@@ -210,9 +210,17 @@ export async function POST(request: NextRequest) {
         if (addrSignal === "confirm") {
           finalAddress = savedAddress;
         } else {
-          // ambiguous = customer typed a new address
+          // ambiguous — verify it's actually address text, not a customer command
           const typed = msgText.trim();
           if (!typed) {
+            await sendWhatsAppMessage(senderPhone, addressConfirmMessage(savedAddress));
+            return NextResponse.json({ status: "ok" });
+          }
+          const addrProds = await getActiveProducts(tenant.id);
+          const addrCheck = await parseCustomerMessage(typed, addrProds, {
+            store_name: tenant.name, store_category: tenant.category ?? "toko online",
+          });
+          if (addrCheck.intent !== "low_confidence") {
             await sendWhatsAppMessage(senderPhone, addressConfirmMessage(savedAddress));
             return NextResponse.json({ status: "ok" });
           }
@@ -228,6 +236,14 @@ export async function POST(request: NextRequest) {
         }
         const typed = msgText.trim();
         if (!typed) {
+          await sendWhatsAppMessage(senderPhone, addressRequestMessage());
+          return NextResponse.json({ status: "ok" });
+        }
+        const addrProds = await getActiveProducts(tenant.id);
+        const addrCheck = await parseCustomerMessage(typed, addrProds, {
+          store_name: tenant.name, store_category: tenant.category ?? "toko online",
+        });
+        if (addrCheck.intent !== "low_confidence") {
           await sendWhatsAppMessage(senderPhone, addressRequestMessage());
           return NextResponse.json({ status: "ok" });
         }
