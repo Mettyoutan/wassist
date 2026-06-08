@@ -159,10 +159,12 @@ Tentukan apakah pesan berarti:
 - cancel   : tidak mau / batal / stop / gak jadi
 - ambiguous: tidak jelas, tidak bisa dipastikan
 
-PENTING (hanya konteks customer): Jika pesan mengandung nama produk, kata "tambah", "mau pesan", "pesan X lagi",
-atau request item baru → SELALU kembalikan ambiguous.
-Customer mungkin ingin menambah item ke pesanan, bukan mengkonfirmasi pesanan selesai.
-Jika prompt menyebut "Konteks: owner" → aturan ini TIDAK berlaku, parse konfirmasi normal.
+PENTING — konteks customer: Jika pesan mengandung nama produk, kata "tambah", "mau pesan", "pesan X lagi",
+atau request item baru → SELALU kembalikan ambiguous (mungkin mau tambah item ke pesanan).
+
+PENTING — konteks owner: Jika pesan mengandung kata perintah baru ("kurangi", "tambah", "tambahkan",
+"ubah", "update", "ganti", "nonaktifkan", "aktifkan", "set", "hapus") yang disertai nama produk atau angka
+→ SELALU kembalikan ambiguous (owner mungkin memberi perintah baru, bukan mengkonfirmasi).
 
 Handle bahasa informal Indonesia: typo, singkatan, campur Inggris-Indonesia, slang (gak, ngga, gas, sip, dll).`,
   generationConfig: {
