@@ -32,7 +32,6 @@ import { greetingMessage,
          sessionRenewedMessage,
          pendingPaymentReminderMessage,
          orderCancelledMessage,
-         awaitingPaymentReminderMessage,
          nonTextMessageResponse,
          ownerModifyOrderNotification,
          productNotAvailableMessage }    from "@/lib/response-template";
@@ -259,9 +258,7 @@ export async function POST(request: NextRequest) {
 
       if (paymentSignal === "resend_qr" && session.current_order_id) {
         const order = await getOrderById(session.current_order_id);
-        if (!order?.midtrans_id) {
-          console.warn("[webhook/awaiting_payment] resend_qr: order has no midtrans_id", session.current_order_id);
-        } else {
+        if (order?.midtrans_id) {
           const qrString = await getMidtransQrString(order.midtrans_id);
           if (qrString) {
             try {
@@ -279,24 +276,16 @@ export async function POST(request: NextRequest) {
               console.warn("[webhook/awaiting_payment] QR resend failed:", err);
             }
           }
-          // qrString null OR image send failed → always send fallback with order ID
+          // qrString null OR image send failed → fallback text
           await sendWhatsAppMessage(senderPhone, qrResendFailedMessage(order.midtrans_id));
           return NextResponse.json({ status: "ok" });
         }
+        // no midtrans_id → fall through to normal processing
       }
 
-      // paymentSignal === "other" atau resend_qr tanpa order_id
-      if (session.current_order_id) {
-        const reminderOrder = await getOrderById(session.current_order_id);
-        const displayId = reminderOrder?.midtrans_id ?? session.current_order_id.slice(-6).toUpperCase();
-        await sendWhatsAppMessage(
-          senderPhone,
-          awaitingPaymentReminderMessage(displayId, reminderOrder?.total_amount),
-        );
-      } else {
-        await sendWhatsAppMessage(senderPhone, awaitingPaymentReminderMessage());
-      }
-      return NextResponse.json({ status: "ok" });
+      // paymentSignal === "other" OR resend_qr without valid order → fall through
+      // No early return — customer can browse, check status, etc.
+      // Order stays open in Midtrans until it expires naturally
     }
 
     // ── OWNER vs CUSTOMER ────────────────────────────────────────────────────
