@@ -1,4 +1,14 @@
-import { deleteProduct, updateProduct } from "@/server/db";
+import { deleteProduct, getProductById, updateProduct } from "@/server/db";
+
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id: productId } = await params;
+  const product = await getProductById(productId);
+  if (!product) return Response.json({ error: "Product not found" }, { status: 404 });
+  return Response.json({ product });
+}
 
 export async function PATCH(
   request: Request,
