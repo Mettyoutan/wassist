@@ -14,6 +14,11 @@ export type LowStockProduct = {
   reorderPoint: number;
 };
 
+export type TrendPoint = {
+  label: string;
+  revenue: number;
+};
+
 export type RevenueData = {
   period: string;
   periodStart: string;
@@ -22,6 +27,11 @@ export type RevenueData = {
   aov: number;
   topProducts: TopProduct[];
   lowStockProducts: LowStockProduct[];
+  trendPoints: TrendPoint[];
+  qrisCount: number;
+  manualCount: number;
+  uniqueCustomers: number;
+  repeatCustomers: number;
 };
 
 export function parsePeriod(raw: string): { periodStart: string; label: string } {
@@ -53,7 +63,7 @@ export async function queryRevenueData(
   // KPI — hanya order PAID
   const { data: paidOrders } = await supabaseAdmin
     .from("orders")
-    .select("id, total_amount")
+    .select("id, total_amount, created_at, payment_method, customer_user_id")
     .eq("tenant_id", tenantId)
     .eq("payment_status", "PAID")
     .gte("created_at", periodStart);
@@ -117,5 +127,59 @@ export async function queryRevenueData(
     .slice(0, 5)
     .map((p) => ({ name: p.name, unit: p.unit, stock: p.stock, reorderPoint: p.reorder_point }));
 
-  return { period: label, periodStart, totalRevenue, orderCount, aov, topProducts, lowStockProducts };
+  // ── Trend points: revenue bucketed by time ──
+  const periodLower = periodRaw.toLowerCase();
+  let trendPoints: TrendPoint[];
+  if (periodLower.includes("minggu") || periodLower.includes("week")) {
+    const DAY_LABELS = ["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"];
+    const DAY_JS = [1, 2, 3, 4, 5, 6, 0];
+    trendPoints = DAY_JS.map((jsDay, i) => ({
+      label: DAY_LABELS[i],
+      revenue: (paidOrders ?? [])
+        .filter((o) => new Date(o.created_at).getDay() === jsDay)
+        .reduce((s, o) => s + o.total_amount, 0),
+    }));
+  } else if (periodLower.includes("bulan") || periodLower.includes("month")) {
+    trendPoints = [1, 2, 3, 4].map((week) => ({
+      label: `Minggu ${week}`,
+      revenue: (paidOrders ?? [])
+        .filter((o) => Math.ceil(new Date(o.created_at).getDate() / 7) === week)
+        .reduce((s, o) => s + o.total_amount, 0),
+    }));
+  } else {
+    const HOURS = [8, 10, 12, 14, 16, 18, 20];
+    trendPoints = HOURS.map((h) => ({
+      label: `${h.toString().padStart(2, "0")}:00`,
+      revenue: (paidOrders ?? [])
+        .filter((o) => {
+          const hr = new Date(o.created_at).getHours();
+          return hr >= h && hr < h + 2;
+        })
+        .reduce((s, o) => s + o.total_amount, 0),
+    }));
+  }
+
+  // ── Payment method split ──
+  const qrisCount = (paidOrders ?? []).filter(
+    (o) => (o.payment_method ?? "QRIS").toUpperCase() === "QRIS"
+  ).length;
+  const manualCount = orderCount - qrisCount;
+
+  // ── Customer loyalty ──
+  const customerOrderCount = new Map<string, number>();
+  for (const o of paidOrders ?? []) {
+    if (!o.customer_user_id) continue;
+    customerOrderCount.set(
+      o.customer_user_id,
+      (customerOrderCount.get(o.customer_user_id) ?? 0) + 1
+    );
+  }
+  const uniqueCustomers = customerOrderCount.size;
+  const repeatCustomers = [...customerOrderCount.values()].filter((n) => n >= 2).length;
+
+  return {
+    period: label, periodStart, totalRevenue, orderCount, aov,
+    topProducts, lowStockProducts,
+    trendPoints, qrisCount, manualCount, uniqueCustomers, repeatCustomers,
+  };
 }
