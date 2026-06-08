@@ -30,6 +30,21 @@ export function itemsNotFoundMessage(names: string[]): string {
     return `Maaf kak, produk berikut tidak tersedia di toko kami:\n${list}\n\nMau lihat koleksi kami? 😊`;
 }
 
+export function productNotAvailableMessage(
+  suggestedName?: string,
+  suggestedPrice?: number,
+  suggestedUnit?: string
+): string {
+  if (suggestedName && suggestedPrice !== undefined && suggestedUnit) {
+    return (
+      `Maaf kak, produk yang dicari tidak ada di toko kami 😊\n\n` +
+      `Mungkin kamu suka *${suggestedName}* — ` +
+      `Rp${suggestedPrice.toLocaleString("id-ID")}/${suggestedUnit}?\n\n` +
+      `Ini semua koleksi kami:`
+    );
+  }
+  return `Maaf kak, sepertinya produk yang dicari belum ada di toko kami 😊 Ini yang tersedia ya!`;
+}
 
 export function paymentLinkMessage(total: number, url: string, orderId?: string): string {
   const urlLine     = url     ? `Bayar via QRIS: ${url}\n`          : "";

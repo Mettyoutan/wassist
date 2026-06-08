@@ -230,3 +230,29 @@ TIDAK VALID:
   },
   safetySettings,
 });
+
+// Model 6: Product Suggestion — rekomen produk terdekat untuk low_confidence intent
+export const productSuggestModel = genAI.getGenerativeModel({
+  model: "gemini-3.1-flash-lite",
+  systemInstruction: `Kamu adalah sistem rekomendasi produk untuk toko online WhatsApp.
+Diberikan daftar produk dan pesan customer, tentukan apakah ada produk yang paling mirip dengan yang customer cari.
+
+ATURAN:
+- found: true HANYA jika ada produk yang cukup mirip (kategori sama atau sangat relevan)
+- Jangan return found:true untuk kemiripan yang sangat jauh (customer mau sepatu → produk hanya baju → found: false)
+- product_index: nomor urut produk yang paling mirip dari daftar (1-based integer)
+- Jika tidak ada yang mirip → found: false, product_index: 0`,
+  generationConfig: {
+    temperature: 0.1,
+    responseMimeType: "application/json",
+    responseSchema: {
+      type: SchemaType.OBJECT,
+      properties: {
+        found:          { type: SchemaType.BOOLEAN },
+        product_index:  { type: SchemaType.INTEGER },
+      },
+      required: ["found", "product_index"],
+    },
+  },
+  safetySettings,
+});

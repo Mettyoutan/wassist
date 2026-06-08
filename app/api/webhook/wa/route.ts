@@ -33,17 +33,18 @@ import { greetingMessage,
          orderCancelledMessage,
          awaitingPaymentReminderMessage,
          nonTextMessageResponse,
-         ownerModifyOrderNotification }  from "@/lib/response-template";
+         ownerModifyOrderNotification,
+         productNotAvailableMessage }    from "@/lib/response-template";
 import { getMidtransQrString }           from "@/lib/midtrans";
 import { handleBrowseIntent }            from "@/lib/handlers/browse";
 import { handleStatusIntent }            from "@/lib/handlers/status";
-import { handleHandoffIntent }           from "@/lib/handlers/handoff";
 import { handleOrderIntent }            from "@/lib/handlers/order-new";
 import { handleClarificationAnswer }   from "@/lib/handlers/clarification";
 import { processOrderConfirmation }    from "@/lib/handlers/confirm-order";
 import { handleCartOrder }               from "@/lib/handlers/cart-order";
 import { handleOwnerCommand }            from "@/lib/handlers/owner";
 import { handleRepeatLastIntent }        from "@/lib/handlers/repeat-last";
+import { suggestClosestProduct }         from "@/lib/ai/product-suggester";
 import type { DbTenant }                 from "@/lib/types/db";
 import type { WAWebhookBody, WAMessage,
               WATextMessage,
@@ -375,11 +376,25 @@ export async function POST(request: NextRequest) {
         );
         break;
 
-      // low confidence → generic handoff
+      // low confidence → suggest produk terdekat + tampilkan katalog
       case "low_confidence":
-      default:
-        await handleHandoffIntent(tenant, senderPhone);
+      default: {
+        const suggestion = await suggestClosestProduct(products, msgText);
+        const suggestedProduct =
+          suggestion.found && suggestion.product_index > 0 && suggestion.product_index <= products.length
+            ? products[suggestion.product_index - 1]
+            : null;
+        await sendWhatsAppMessage(
+          senderPhone,
+          productNotAvailableMessage(
+            suggestedProduct?.name,
+            suggestedProduct?.price,
+            suggestedProduct?.unit
+          )
+        );
+        await handleBrowseIntent(tenant, senderPhone);
         break;
+      }
     }
 
   } catch (err) {
