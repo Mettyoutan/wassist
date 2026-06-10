@@ -15,8 +15,9 @@ export const ParsedIntentSchema = z.object({
     "modify_order", "cancel_order", "order_status",
     "product_detail", "greeting", "low_confidence",
   ]),
-  items:      z.array(OrderItemSchema).default([]),
-  confidence: z.number().min(0).max(1),
+  items:         z.array(OrderItemSchema).default([]),
+  product_index: z.number().int().min(1).optional().catch(undefined),
+  confidence:    z.number().min(0).max(1),
 });
 
 export type ParsedIntent    = z.infer<typeof ParsedIntentSchema>;
