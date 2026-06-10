@@ -381,7 +381,11 @@ export async function POST(request: NextRequest) {
     // ── INTENT ROUTER ────────────────────────────────────────────────────────
     switch (parsed.intent) {
       case "greeting":
-        await sendWhatsAppMessage(senderPhone, greetingMessage(tenant.name));
+        await sendInteractiveButtons(
+          senderPhone,
+          greetingMessage(tenant.name),
+          [...GREETING_BUTTONS],
+        );
         break;
 
       case "browse":
@@ -395,7 +399,11 @@ export async function POST(request: NextRequest) {
           const activeOrder = await getLatestActiveOrderWithItems(tenant.id, custUserId);
           if (activeOrder && activeOrder.status === "AWAITING_PAYMENT") {
             const displayId = activeOrder.midtrans_id ?? activeOrder.id.slice(-6).toUpperCase();
-            await sendWhatsAppMessage(senderPhone, pendingPaymentReminderMessage(displayId));
+            await sendInteractiveButtons(
+              senderPhone,
+              pendingPaymentReminderMessage(displayId),
+              [...PAYMENT_REMINDER_BUTTONS],
+            );
             break;
           }
         }
