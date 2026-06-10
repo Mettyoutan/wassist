@@ -41,9 +41,25 @@ export async function sendWhatsAppMessage(
 // Syarat: catalog sudah di-link ke WABA di Commerce Manager
 export async function sendCatalogMessage(
   to: string,
-  catalogId: string,
-  bodyText: string
+  _catalogId: string,
+  bodyText: string,
+  thumbnailRetailerId?: string
 ): Promise<SendMessageResult> {
+  const action: Record<string, unknown> = { name: "catalog_message" };
+  if (thumbnailRetailerId) {
+    action.parameters = { thumbnail_product_retailer_id: thumbnailRetailerId };
+  }
+
+  const payload = {
+    messaging_product: "whatsapp",
+    to,
+    type: "interactive",
+    interactive: {
+      type: "catalog_message",
+      body: { text: bodyText },
+      action,
+    },
+  };
   const res = await fetch(
     `https://graph.facebook.com/v19.0/${process.env.META_PHONE_NUMBER_ID}/messages`,
     {
@@ -52,16 +68,7 @@ export async function sendCatalogMessage(
         Authorization: `Bearer ${process.env.META_ACCESS_TOKEN}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        messaging_product: "whatsapp",
-        to,
-        type: "interactive",
-        interactive: {
-          type: "catalog_message",
-          body: { text: bodyText },
-          action: { catalog_id: catalogId }, // catalog ID dari Commerce Manager
-        },
-      }),
+      body: JSON.stringify(payload),
     }
   );
 
@@ -132,6 +139,52 @@ export async function sendWhatsAppImageMessage(
   if (!res.ok) {
     const err = await res.text();
     console.error(`[WA] sendWhatsAppImageMessage to=${to} failed:`, err);
+    return { success: false, error: err };
+  }
+
+  const data = await res.json();
+  return { success: true, message_id: data.messages?.[0]?.id };
+}
+
+// Kirim interactive quick-reply buttons — max 3 buttons, title max 20 chars.
+export async function sendInteractiveButtons(
+  to:      string,
+  body:    string,
+  buttons: Array<{ id: string; title: string }>,
+  footer?: string,
+): Promise<SendMessageResult> {
+  const payload = {
+    messaging_product: "whatsapp",
+    to,
+    type: "interactive",
+    interactive: {
+      type: "button",
+      body: { text: body },
+      ...(footer ? { footer: { text: footer } } : {}),
+      action: {
+        buttons: buttons.map(btn => ({
+          type: "reply",
+          reply: { id: btn.id, title: btn.title },
+        })),
+      },
+    },
+  };
+
+  const res = await fetch(
+    `https://graph.facebook.com/v19.0/${process.env.META_PHONE_NUMBER_ID}/messages`,
+    {
+      method: "POST",
+      headers: {
+        Authorization:  `Bearer ${process.env.META_ACCESS_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    }
+  );
+
+  if (!res.ok) {
+    const err = await res.text();
+    console.error(`[WA] sendInteractiveButtons to=${to} failed:`, err);
     return { success: false, error: err };
   }
 
