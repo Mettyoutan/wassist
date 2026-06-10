@@ -15,6 +15,7 @@ import { getSession,
          peekExpiredSession }            from "@/lib/session";
 import { parseCustomerMessage }          from "@/lib/ai/customer-parser";
 import { sendWhatsAppMessage,
+         sendInteractiveButtons,
          uploadWhatsAppMedia,
          sendWhatsAppImageMessage }      from "@/lib/whatsapp";
 import { parseConfirmationIntent,
@@ -49,7 +50,8 @@ import { suggestClosestProduct }         from "@/lib/ai/product-suggester";
 import type { DbTenant }                 from "@/lib/types/db";
 import type { WAWebhookBody, WAMessage,
               WATextMessage,
-              WAOrderMessage }           from "@/lib/types/whatsapp";
+              WAOrderMessage,
+              WAInteractiveMessage }     from "@/lib/types/whatsapp";
 import QRCode from "qrcode";
 
 // ─── GET: Webhook verification dari Meta ─────────────────────────────────────
@@ -122,15 +124,30 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ status: "ok" });
     }
 
-    // ── Hanya proses teks selanjutnya ─────────────────────────────────────
-    if (message.type !== "text") {
+    // ── Extract msgText: plain text ATAU interactive button reply ─────────────
+    // Map button IDs ke teks agar state machine tidak perlu tahu bedanya
+    const BUTTON_TO_TEXT: Record<string, string> = {
+      yes:       "ya",
+      cancel:    "batal",
+      resend_qr: "kirim ulang QR",
+      view_menu: "menu",
+    };
+
+    let msgText: string;
+    if (message.type === "interactive") {
+      const intr = (message as WAInteractiveMessage).interactive;
+      if (intr?.type === "button_reply") {
+        msgText = BUTTON_TO_TEXT[intr.button_reply.id] ?? intr.button_reply.id;
+      } else {
+        await sendWhatsAppMessage(senderPhone, nonTextMessageResponse());
+        return NextResponse.json({ status: "ok" });
+      }
+    } else if (message.type === "text") {
+      msgText = (message as WATextMessage).text.body;
+    } else {
       await sendWhatsAppMessage(senderPhone, nonTextMessageResponse());
       return NextResponse.json({ status: "ok" });
     }
-
-    // Get WA message
-    const textMsg    = message as WATextMessage;
-    const msgText    = textMsg.text.body;
 
     // Check for expired session BEFORE getSession resets it
     const { wasActive } = peekExpiredSession(tenant.id, senderPhone);
@@ -375,7 +392,7 @@ export async function POST(request: NextRequest) {
         break;
 
       case "product_detail":
-        await handleProductDetailIntent(tenant, senderPhone, products, parsed.items[0]?.product_index ?? 0);
+        await handleProductDetailIntent(tenant, senderPhone, products, parsed.product_index ?? 0);
         break;
 
       case "cancel_order": {
