@@ -35,7 +35,11 @@ import { greetingMessage,
          orderCancelledMessage,
          nonTextMessageResponse,
          ownerModifyOrderNotification,
-         productNotAvailableMessage }    from "@/lib/response-template";
+         productNotAvailableMessage,
+         CONFIRM_PENDING_BUTTONS,
+         ADDRESS_CONFIRM_BUTTONS,
+         GREETING_BUTTONS,
+         PAYMENT_REMINDER_BUTTONS }     from "@/lib/response-template";
 import { getMidtransQrString }           from "@/lib/midtrans";
 import { handleBrowseIntent }            from "@/lib/handlers/browse";
 import { handleStatusIntent }            from "@/lib/handlers/status";
@@ -175,7 +179,11 @@ export async function POST(request: NextRequest) {
         });
 
         if (savedAddress) {
-          await sendWhatsAppMessage(senderPhone, addressConfirmMessage(savedAddress));
+          await sendInteractiveButtons(
+            senderPhone,
+            addressConfirmMessage(savedAddress),
+            [...ADDRESS_CONFIRM_BUTTONS],
+          );
         } else {
           await sendWhatsAppMessage(senderPhone, addressRequestMessage());
         }
@@ -205,10 +213,14 @@ export async function POST(request: NextRequest) {
       } else if (parsedAdd.intent === "modify_order") {
         await sendWhatsAppMessage(senderPhone, modifyOrderInConfirmationMessage());
       } else {
-        await sendWhatsAppMessage(senderPhone, confirmationPendingMessage(
-          session.pending_order?.items,
-          session.pending_order?.total,
-        ));
+        await sendInteractiveButtons(
+          senderPhone,
+          confirmationPendingMessage(
+            session.pending_order?.items,
+            session.pending_order?.total,
+          ),
+          [...CONFIRM_PENDING_BUTTONS],
+        );
       }
       return NextResponse.json({ status: "ok" });
     }
@@ -231,7 +243,11 @@ export async function POST(request: NextRequest) {
           // ambiguous — verify it's actually address text, not a customer command
           const typed = msgText.trim();
           if (!typed) {
-            await sendWhatsAppMessage(senderPhone, addressConfirmMessage(savedAddress));
+            await sendInteractiveButtons(
+              senderPhone,
+              addressConfirmMessage(savedAddress),
+              [...ADDRESS_CONFIRM_BUTTONS],
+            );
             return NextResponse.json({ status: "ok" });
           }
           const addrProds = await getActiveProducts(tenant.id);
@@ -239,7 +255,11 @@ export async function POST(request: NextRequest) {
             store_name: tenant.name, store_category: tenant.category ?? "toko online",
           });
           if (addrCheck.intent !== "low_confidence") {
-            await sendWhatsAppMessage(senderPhone, addressConfirmMessage(savedAddress));
+            await sendInteractiveButtons(
+              senderPhone,
+              addressConfirmMessage(savedAddress),
+              [...ADDRESS_CONFIRM_BUTTONS],
+            );
             return NextResponse.json({ status: "ok" });
           }
           finalAddress = typed;
