@@ -35,6 +35,7 @@ export type WAMessage =
   | WAOrderMessage
   | WAAudioMessage
   | WAImageMessage
+  | WAInteractiveMessage
   | WAUnknownMessage;
 
 // Base object yg dibutuhkan beberapa message type
@@ -76,6 +77,17 @@ export type WAImageMessage = WAMessageBase & {
 
 export type WAUnknownMessage = WAMessageBase & {
   type: string;  // semua type lain yang tidak ditangani (location, sticker, dll)
+};
+
+export type WAInteractiveMessage = WAMessageBase & {
+  type: "interactive";
+  interactive: {
+    type: "button_reply";
+    button_reply: {
+      id: string;
+      title: string;
+    };
+  };
 };
 
 export type WAStatus = {

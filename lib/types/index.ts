@@ -1,7 +1,7 @@
 export type {
   WAWebhookBody, WAEntry, WAChange, WAChangeValue, WAMetadata,
   WAMessage, WATextMessage, WAOrderMessage, WAOrderItem,
-  WAAudioMessage, WAImageMessage, WAUnknownMessage,
+  WAAudioMessage, WAImageMessage, WAInteractiveMessage, WAUnknownMessage,
   WAStatus, SendMessageResult,
 } from "./whatsapp";
 
