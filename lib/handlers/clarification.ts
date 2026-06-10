@@ -1,4 +1,4 @@
-import { sendWhatsAppMessage }                     from "@/lib/whatsapp";
+import { sendWhatsAppMessage, sendInteractiveButtons } from "@/lib/whatsapp";
 import { setSession, clearSession }                from "@/lib/session";
 import { handleBrowseIntent }                      from "@/lib/handlers/browse";
 import { parseClarificationInput, type ClarificationChoice } from "@/lib/ai/confirmation-parser";
@@ -8,6 +8,7 @@ import {
   quantityClarificationMessage,
   clarificationOutOfStockMessage,
   orderCancelledMessage,
+  ORDER_CONFIRM_BUTTONS,
 }                                                  from "@/lib/response-template";
 import type { DbTenant }                           from "@/lib/types/db";
 import type { Session, PendingOrderItem }          from "@/lib/types/session";
@@ -215,7 +216,11 @@ async function finalizeOrder(
     last_updated:  Date.now(),
   });
 
-  await sendWhatsAppMessage(senderPhone, orderConfirmationMessage(allItems, total, droppedNames.length > 0 ? droppedNames : undefined));
+  await sendInteractiveButtons(
+    senderPhone,
+    orderConfirmationMessage(allItems, total, droppedNames.length > 0 ? droppedNames : undefined),
+    [...ORDER_CONFIRM_BUTTONS],
+  );
 }
 
 async function handleRetry(

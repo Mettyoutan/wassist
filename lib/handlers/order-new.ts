@@ -1,5 +1,5 @@
 import { getProductByName }                        from "@/server/db";
-import { sendWhatsAppMessage }                      from "@/lib/whatsapp";
+import { sendWhatsAppMessage, sendInteractiveButtons } from "@/lib/whatsapp";
 import { setSession }                               from "@/lib/session";
 import { handleBrowseIntent }                       from "@/lib/handlers/browse";
 import {
@@ -8,6 +8,7 @@ import {
   storeClosedMessage,
   variantClarificationMessage,
   quantityClarificationMessage,
+  ORDER_CONFIRM_BUTTONS,
 }                                                   from "@/lib/response-template";
 import type { DbTenant }                            from "@/lib/types/db";
 import type { PendingOrderItem, ClarificationCandidate, PendingClarification } from "@/lib/types/session";
@@ -266,9 +267,10 @@ export async function handleOrderIntent(
 
   const allItems = [...existingItems, ...resolvedItems];
   const total    = allItems.reduce((sum, i) => sum + i.subtotal, 0);
-  await sendWhatsAppMessage(
+  await sendInteractiveButtons(
     senderPhone,
-    orderConfirmationMessage(allItems, total, notFoundNames.length > 0 ? notFoundNames : undefined)
+    orderConfirmationMessage(allItems, total, notFoundNames.length > 0 ? notFoundNames : undefined),
+    [...ORDER_CONFIRM_BUTTONS],
   );
   setSession(tenant.id, senderPhone, {
     state:         "awaiting_confirmation",

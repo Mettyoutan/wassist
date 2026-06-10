@@ -1,13 +1,14 @@
 import { getUserIdByPhone,
          getLastCompletedOrderWithItems,
          getProductByName }        from "@/server/db";
-import { sendWhatsAppMessage }     from "@/lib/whatsapp";
+import { sendWhatsAppMessage, sendInteractiveButtons } from "@/lib/whatsapp";
 import { setSession }              from "@/lib/session";
 import {
   orderConfirmationMessage,
   repeatLastNotFoundMessage,
   repeatLastUnavailableMessage,
   storeClosedMessage,
+  ORDER_CONFIRM_BUTTONS,
 }                                  from "@/lib/response-template";
 import type { DbTenant }           from "@/lib/types/db";
 import type { Session, PendingOrderItem } from "@/lib/types/session";
@@ -68,14 +69,15 @@ export async function handleRepeatLastIntent(
 
   const total = resolvedItems.reduce((sum, i) => sum + i.subtotal, 0);
 
-  await sendWhatsAppMessage(
+  await sendInteractiveButtons(
     senderPhone,
     orderConfirmationMessage(
       resolvedItems,
       total,
       unavailableNames.length > 0 ? unavailableNames : undefined,
       adjustedItemNotes.length > 0 ? adjustedItemNotes : undefined,
-    )
+    ),
+    [...ORDER_CONFIRM_BUTTONS],
   );
 
   setSession(tenant.id, senderPhone, {
