@@ -14,7 +14,7 @@ export const CONFIRM_PENDING_BUTTONS = [
 ] as const;
 
 export const ADDRESS_CONFIRM_BUTTONS = [
-  { id: "yes",    title: "✅ Ya, Kirim ke Sini" },
+  { id: "yes",    title: "✅ Kirim ke Sini" },
   { id: "cancel", title: "❌ Batal" },
 ] as const;
 
