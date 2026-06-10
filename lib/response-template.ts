@@ -1,5 +1,31 @@
 // TEMPLATE MESSAGE untukk kurangi beban AI model
 
+// ── Interactive Button Constants ─────────────────────────────────────────────
+// id harus match BUTTON_TO_TEXT di app/api/webhook/wa/route.ts
+
+export const ORDER_CONFIRM_BUTTONS = [
+  { id: "yes",    title: "✅ Ya, Lanjut Bayar" },
+  { id: "cancel", title: "❌ Batal" },
+] as const;
+
+export const CONFIRM_PENDING_BUTTONS = [
+  { id: "yes",    title: "✅ Ya, Lanjut Bayar" },
+  { id: "cancel", title: "❌ Batal" },
+] as const;
+
+export const ADDRESS_CONFIRM_BUTTONS = [
+  { id: "yes",    title: "✅ Ya, Kirim ke Sini" },
+  { id: "cancel", title: "❌ Batal" },
+] as const;
+
+export const GREETING_BUTTONS = [
+  { id: "view_menu", title: "📋 Lihat Menu" },
+] as const;
+
+export const PAYMENT_REMINDER_BUTTONS = [
+  { id: "resend_qr", title: "📱 Kirim Ulang QR" },
+  { id: "cancel",    title: "❌ Batalkan" },
+] as const;
 
 export function orderConfirmationMessage(
     items: Array<{ name: string; qty: number; size?: string; subtotal: number }>,
@@ -22,7 +48,7 @@ export function orderConfirmationMessage(
         ? `\n\n_Stok terbatas, qty disesuaikan: ${adjustedItems.join(", ")}_`
         : "";
 
-    return `Oke kak! Ini pesanannya ya:\n\n${itemLines}\n\n*Total: Rp${total.toLocaleString("id-ID")}*${notFoundNote}${adjustedNote}\n\nMau lanjut bayar? Balas *ya* atau *batal* 😊`;
+    return `Oke kak! Ini pesanannya ya:\n\n${itemLines}\n\n*Total: Rp${total.toLocaleString("id-ID")}*${notFoundNote}${adjustedNote}`;
 }
 
 export function itemsNotFoundMessage(names: string[]): string {
@@ -128,7 +154,7 @@ export function quantityClarificationMessage(
 }
 
 export function greetingMessage(storeName: string): string {
-  return `Halo kak! Selamat datang di *${storeName}* 👋\n\nAda yang bisa kami bantu?\n• Ketik *menu* untuk lihat katalog\n• Atau langsung sebutkan pesananmu 😊`;
+  return `Halo kak! Selamat datang di *${storeName}* 👋\n\nAda yang bisa kami bantu? Tap tombol atau langsung ketik pesananmu 😊`;
 }
 
 // Status order
@@ -174,11 +200,7 @@ export function confirmationPendingMessage(
       }).join("\n") +
       `\n*Total: Rp${total.toLocaleString("id-ID")}*`
     : "";
-  return (
-    `Pesananmu masih menunggu konfirmasi ya kak 😊${summary}\n\n` +
-    `• Balas *ya* untuk lanjut bayar\n` +
-    `• Balas *batal* untuk ubah atau batalkan pesanan`
-  );
+  return `Pesananmu masih menunggu konfirmasi ya kak 😊${summary}`;
 }
 
 // Dipanggil saat customer kirim modify_order di dalam awaiting_confirmation
@@ -310,7 +332,7 @@ export function pendingPaymentReminderMessage(displayId: string): string {
   return (
     `Kak, kamu masih punya pesanan yang belum dibayar 💳\n\n` +
     `Order ID: *${displayId}*\n\n` +
-    `Selesaikan pembayaran dulu ya kak, atau ketik *batal* untuk membatalkan pesanan yang ada.`
+    `Selesaikan pembayaran dulu, atau batalkan pesanan yang ada.`
   );
 }
 
@@ -322,7 +344,7 @@ export function addressConfirmMessage(savedAddress: string): string {
   return (
     `📦 Kirim ke alamat ini ya kak?\n\n` +
     `*${savedAddress}*\n\n` +
-    `Balas *ya* untuk konfirmasi, ketik *batal* untuk membatalkan, atau ketik alamat baru 😊`
+    `_Atau ketik alamat baru jika ingin ganti._`
   );
 }
 
@@ -392,26 +414,48 @@ export function productDetailMessage(
   stock: number,
   description: string | null | undefined
 ): string {
-  const desc      = description ? `\n\n📝 ${description}` : "";
-  const stockInfo = stock > 0
-    ? `✅ Stok tersedia: ${stock} ${unit}`
-    : "❌ Stok habis";
-  return `*${name}*\n💰 Rp${price.toLocaleString("id-ID")}/${unit}\n${stockInfo}${desc}\n\nMau order? Ketik:\n*${name} [jumlah]*`;
+  const stockLine = stock > 0
+    ? `📦 *Stok:* ${stock} ${unit}`
+    : `📦 *Stok:* Habis ❌`;
+  const descBlock = description
+    ? `\n\n📋 *Deskripsi:*\n${description}`
+    : "";
+  const cta = stock > 0
+    ? `\n\n🛒 Mau pesan? Balas:\n*${name} [jumlah]*`
+    : `\n\nKetik *menu* untuk lihat produk lainnya.`;
+  return `*${name}*\n\n💰 *Harga:* Rp${price.toLocaleString("id-ID")}/${unit}\n${stockLine}${descBlock}${cta}`;
 }
+
+const CATEGORY_EMOJI: Record<string, string> = {
+  atasan: "👕", kemeja: "👔", blouse: "👚",
+  bawahan: "👖", celana: "👖", rok: "🩱",
+  dress: "👗", gaun: "👗",
+  outer: "🧥", jaket: "🧥", cardigan: "🧥",
+  aksesoris: "👜", tas: "👜",
+  sepatu: "👟",
+  lainnya: "📦",
+};
 
 export function productBrowseMessage(
   storeName: string,
   grouped: Record<string, Array<{ name: string; price: number; unit: string }>>
 ): string {
-  const lines: string[] = [`Koleksi *${storeName}* 😊\n`];
+  const totalProducts = Object.values(grouped).reduce((sum, arr) => sum + arr.length, 0);
+  const lines: string[] = [
+    `🛍️ *Menu ${storeName}*`,
+    `_${totalProducts} produk tersedia_`,
+    "",
+  ];
   for (const [category, products] of Object.entries(grouped)) {
-    lines.push(`*${category.toUpperCase()}*`);
+    const emoji = CATEGORY_EMOJI[category.toLowerCase().trim()] ?? "🏷️";
+    lines.push(`${emoji} *${category.toUpperCase()}*`);
     for (const p of products) {
       lines.push(`• ${p.name} — Rp${p.price.toLocaleString("id-ID")}/${p.unit}`);
     }
     lines.push("");
   }
-  lines.push("📸 Ketik *detail [nama produk]* untuk foto & info lengkap.");
-  lines.push("🛍️ Order: *[nama produk] [ukuran] [jumlah]*, contoh: *Kaos Oversize M 2*");
-  return lines.join("\n").trim();
+  lines.push("——————————————");
+  lines.push("📸 _detail [nama]_ → foto & info lengkap");
+  lines.push("🛒 _[nama] [jumlah]_ → langsung pesan");
+  return lines.join("\n").trimEnd();
 }
