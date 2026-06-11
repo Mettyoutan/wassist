@@ -51,3 +51,6 @@ next-env.d.ts
 /testing-*
 
 /docs
+
+# large binary assets
+*.pdf
