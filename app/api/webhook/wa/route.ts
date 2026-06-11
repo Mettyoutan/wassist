@@ -39,7 +39,8 @@ import { greetingMessage,
          CONFIRM_PENDING_BUTTONS,
          ADDRESS_CONFIRM_BUTTONS,
          GREETING_BUTTONS,
-         PAYMENT_REMINDER_BUTTONS }     from "@/lib/response-template";
+         PAYMENT_REMINDER_BUTTONS,
+         ownerHelpCategoryText }        from "@/lib/response-template";
 import { getMidtransQrString }           from "@/lib/midtrans";
 import { handleBrowseIntent }            from "@/lib/handlers/browse";
 import { handleStatusIntent }            from "@/lib/handlers/status";
@@ -47,7 +48,9 @@ import { handleOrderIntent }            from "@/lib/handlers/order-new";
 import { handleClarificationAnswer }   from "@/lib/handlers/clarification";
 import { processOrderConfirmation }    from "@/lib/handlers/confirm-order";
 import { handleCartOrder }               from "@/lib/handlers/cart-order";
-import { handleOwnerCommand }            from "@/lib/handlers/owner";
+import { handleOwnerCommand,
+         handleOwnerOrderSelection,
+         executeOwnerOrderAction }       from "@/lib/handlers/owner";
 import { handleRepeatLastIntent }        from "@/lib/handlers/repeat-last";
 import { handleProductDetailIntent }     from "@/lib/handlers/product-detail";
 import { suggestClosestProduct }         from "@/lib/ai/product-suggester";
@@ -140,8 +143,41 @@ export async function POST(request: NextRequest) {
     let msgText: string;
     if (message.type === "interactive") {
       const intr = (message as WAInteractiveMessage).interactive;
+
+      if (intr?.type === "list_reply") {
+        const listId = intr.list_reply.id;
+        if (tenant.owner_phone === senderPhone) {
+          if (listId.startsWith("select_order:")) {
+            const orderId = listId.slice("select_order:".length);
+            await handleOwnerOrderSelection(tenant, senderPhone, orderId);
+          } else if (listId.startsWith("help:")) {
+            const category = listId.slice("help:".length);
+            await sendWhatsAppMessage(senderPhone, ownerHelpCategoryText(category));
+          }
+        }
+        return NextResponse.json({ status: "ok" });
+      }
+
       if (intr?.type === "button_reply") {
-        msgText = BUTTON_TO_TEXT[intr.button_reply.id] ?? intr.button_reply.id;
+        const btnId = intr.button_reply.id;
+
+        // Encoded owner actions: mark_paid:{uuid}, mark_fulfilled:{uuid}, mark_done:{uuid}
+        const ownerActionMatch = btnId.match(/^(mark_paid|mark_fulfilled|mark_done):(.+)$/);
+        if (ownerActionMatch && tenant.owner_phone === senderPhone) {
+          await executeOwnerOrderAction(
+            tenant, senderPhone,
+            ownerActionMatch[1] as "mark_paid" | "mark_fulfilled" | "mark_done",
+            ownerActionMatch[2],
+          );
+          return NextResponse.json({ status: "ok" });
+        }
+
+        if (btnId === "cancel_action") {
+          await sendWhatsAppMessage(senderPhone, "Dibatalkan 👍");
+          return NextResponse.json({ status: "ok" });
+        }
+
+        msgText = BUTTON_TO_TEXT[btnId] ?? btnId;
       } else {
         await sendWhatsAppMessage(senderPhone, nonTextMessageResponse());
         return NextResponse.json({ status: "ok" });
@@ -412,7 +448,7 @@ export async function POST(request: NextRequest) {
       }
 
       case "order_status":
-        await handleStatusIntent(tenant, senderPhone);
+        await handleStatusIntent(tenant, senderPhone, session);
         break;
 
       case "repeat_last":

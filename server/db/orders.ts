@@ -320,6 +320,7 @@ export async function getLastCompletedOrderWithItems(
 }
 
 export type ActiveOrderSummary = {
+  id:             string;
   midtrans_id:    string | null;
   status:         DbOrder["status"];
   total_amount:   number;
@@ -331,7 +332,7 @@ export async function getActiveOrdersForOwner(tenantId: string): Promise<ActiveO
   const { data, error } = await supabaseAdmin
     .from("orders")
     .select(`
-      midtrans_id, status, total_amount,
+      id, midtrans_id, status, total_amount,
       users!orders_customer_user_id_fkey(phone)
     `)
     .eq("tenant_id", tenantId)
@@ -345,6 +346,7 @@ export async function getActiveOrdersForOwner(tenantId: string): Promise<ActiveO
   }
 
   return ((data ?? []) as any[]).map((row) => ({
+    id:             row.id as string,
     midtrans_id:    row.midtrans_id ?? null,
     status:         row.status as DbOrder["status"],
     total_amount:   row.total_amount,

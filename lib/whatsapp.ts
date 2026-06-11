@@ -82,7 +82,6 @@ export async function sendCatalogMessage(
   return { success: true, message_id: data.messages?.[0]?.id };
 }
 
-
 // Upload media ke Meta — return media_id yang dipakai sendWhatsAppImageMessage.
 // Pakai npm form-data (bukan Web API FormData) agar multipart encoding benar di Node.js.
 export async function uploadWhatsAppMedia(imageBuffer: Buffer, contentType = "image/png"): Promise<string> {
@@ -193,3 +192,52 @@ export async function sendInteractiveButtons(
   return { success: true, message_id: data.messages?.[0]?.id };
 }
 
+export type ListSection = {
+  title: string;
+  rows: Array<{ id: string; title: string; description?: string }>;
+};
+
+// Kirim WA interactive list message — max 10 rows total, row title max 24 chars.
+export async function sendListMessage(
+  to:          string,
+  body:        string,
+  buttonLabel: string,
+  sections:    ListSection[],
+  footer?:     string,
+): Promise<SendMessageResult> {
+  const payload = {
+    messaging_product: "whatsapp",
+    to,
+    type: "interactive",
+    interactive: {
+      type: "list",
+      body: { text: body },
+      ...(footer ? { footer: { text: footer } } : {}),
+      action: {
+        button: buttonLabel,
+        sections,
+      },
+    },
+  };
+
+  const res = await fetch(
+    `https://graph.facebook.com/v19.0/${process.env.META_PHONE_NUMBER_ID}/messages`,
+    {
+      method: "POST",
+      headers: {
+        Authorization:  `Bearer ${process.env.META_ACCESS_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    }
+  );
+
+  if (!res.ok) {
+    const err = await res.text();
+    console.error(`[WA] sendListMessage to=${to} failed:`, err);
+    return { success: false, error: err };
+  }
+
+  const data = await res.json();
+  return { success: true, message_id: data.messages?.[0]?.id };
+}

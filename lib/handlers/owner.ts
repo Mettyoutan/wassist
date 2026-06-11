@@ -7,11 +7,14 @@ import { getProductsByTenantAll,
          queryRevenueData,
          getLatestOrderByStatus,
          getActiveOrdersForOwner,
+         getOrderById,
          updateOrderStatus,
          getUserById,
          getOrderItemsByOrderId,
          decrementProductStock }      from "@/server/db";
-import { sendWhatsAppMessage }        from "@/lib/whatsapp";
+import { sendWhatsAppMessage,
+         sendListMessage,
+         sendInteractiveButtons }     from "@/lib/whatsapp";
 import { fulfillmentNotificationMessage,
          orderDoneNotificationMessage,
          ownerMarkPaidMessage,
@@ -21,7 +24,9 @@ import { fulfillmentNotificationMessage,
          ownerNoActiveOrdersMessage,
          ownerNoOrderForFulfillMessage,
          ownerNoOrderForDoneMessage,
-         ownerNoOrderForPaidMessage }    from "@/lib/response-template";
+         ownerNoOrderForPaidMessage,
+         OWNER_HELP_SECTIONS,
+         ownerHelpCategoryText }      from "@/lib/response-template";
 import { generateRevenueResponse }    from "@/lib/owner/generator";
 import { parseOwnerCommand }          from "@/lib/owner/parser";
 import { setSession, clearSession }   from "@/lib/session";
@@ -75,21 +80,26 @@ export async function handleOwnerCommand(
         await sendWhatsAppMessage(ownerPhone, ownerNoActiveOrdersMessage());
         break;
       }
-      const statusLabel: Record<string, string> = {
-        PENDING:          "🕐 Menunggu konfirmasi",
-        AWAITING_PAYMENT: "💳 Menunggu bayar",
-        PAID:             "✅ Lunas — siap kirim",
-        FULFILLED:        "🚚 Sedang dikirim",
+      const statusEmoji: Record<string, string> = {
+        PENDING:          "🕐",
+        AWAITING_PAYMENT: "💳",
+        PAID:             "✅",
+        FULFILLED:        "🚚",
       };
-      const lines = orders.map((o, i) => {
-        const id    = o.midtrans_id ?? `Order-${i + 1}`;
-        const label = statusLabel[o.status] ?? o.status;
-        const total = `Rp${o.total_amount.toLocaleString("id-ID")}`;
-        return `${i + 1}. *${id}*\n   ${label} — ${total}\n   ${o.customer_phone}`;
+      const rows = orders.slice(0, 10).map((o, i) => {
+        const emoji = statusEmoji[o.status] ?? "📋";
+        const phone = o.customer_phone.slice(-4);
+        // title max 24 chars — e.g. "✅ +6281 | Rp85.000"
+        const total = `Rp${Math.round(o.total_amount / 1000)}rb`;
+        const title = `${emoji} ...${phone} | ${total}`.slice(0, 24);
+        const desc  = `${o.status.replace("_", " ")} — ${o.midtrans_id ?? `Order-${i + 1}`}`.slice(0, 72);
+        return { id: `select_order:${o.id}`, title, description: desc };
       });
-      await sendWhatsAppMessage(
+      await sendListMessage(
         ownerPhone,
-        `📋 *Order Aktif (${orders.length})*\n\n${lines.join("\n\n")}`
+        `📋 *${orders.length} Order Aktif*\nKetuk untuk lihat aksi tersedia.`,
+        "Pilih Order",
+        [{ title: "Order", rows }],
       );
       break;
     }
@@ -296,22 +306,95 @@ export async function handleOwnerCommand(
     case "help":
     case "unknown":
     default:
-      await sendWhatsAppMessage(
+      await sendListMessage(
         ownerPhone,
-        `👋 *Owner Command WAssist*\n\n` +
-        `📊 *Laporan*: "omzet hari ini" / "omzet minggu ini"\n` +
-        `📋 *Order aktif*: "ada order apa?" / "order pending"\n` +
-        `📦 *Stok*: "cek stok" / "stok kaos oversize"\n` +
-        `✏️ *Ubah harga*: "harga kaos jadi 90000"\n` +
-        `📥 *Update stok*: "stok kaos jadi 20" / "tambah stok kaos 5"\n` +
-        `🔔 *Batas stok*: "batas stok kaos 5"\n` +
-        `🚫 *Nonaktifkan*: "nonaktifkan kaos oversize"\n` +
-        `🟢 *Toko*: "buka" / "tutup"\n` +
-        `🚚 *Kirim*: "sudah dikirim" / "kirim order"\n` +
-        `✅ *Selesai*: "order selesai" / "sudah diterima"\n\n` +
-        `_Nomor produk merujuk ke urutan katalog aktif._`
+        "👋 *WAssist Owner Menu*\nPilih kategori untuk melihat contoh perintah.",
+        "Lihat Menu",
+        OWNER_HELP_SECTIONS,
       );
       break;
+  }
+}
+
+// ─── Helper: owner taps order from list → show action buttons ────────────────
+
+export async function handleOwnerOrderSelection(
+  tenant:     DbTenant,
+  ownerPhone: string,
+  orderId:    string,
+): Promise<void> {
+  const order = await getOrderById(orderId);
+  if (!order || order.tenant_id !== tenant.id) {
+    await sendWhatsAppMessage(ownerPhone, "Order tidak ditemukan.");
+    return;
+  }
+
+  const displayId = order.midtrans_id ?? order.id.slice(-6).toUpperCase();
+  const total     = `Rp${order.total_amount.toLocaleString("id-ID")}`;
+  const body      = `📋 *Order ${displayId}*\nTotal: ${total}\nStatus: ${order.status.replace("_", " ")}`;
+
+  const buttonsByStatus: Record<string, Array<{ id: string; title: string }>> = {
+    AWAITING_PAYMENT: [{ id: `mark_paid:${order.id}`,       title: "✅ Tandai Lunas"   }],
+    PAID:             [{ id: `mark_fulfilled:${order.id}`,   title: "🚚 Tandai Dikirim" }],
+    FULFILLED:        [{ id: `mark_done:${order.id}`,        title: "✅ Tandai Selesai" }],
+    PENDING:          [{ id: `cancel_action`,                title: "❌ Tutup"          }],
+  };
+
+  const buttons = buttonsByStatus[order.status] ?? [{ id: "cancel_action", title: "❌ Tutup" }];
+  await sendInteractiveButtons(ownerPhone, body, buttons);
+}
+
+// ─── Helper: execute owner action on specific order UUID ─────────────────────
+
+export async function executeOwnerOrderAction(
+  tenant:     DbTenant,
+  ownerPhone: string,
+  action:     "mark_paid" | "mark_fulfilled" | "mark_done",
+  orderId:    string,
+): Promise<void> {
+  const order = await getOrderById(orderId);
+  if (!order || order.tenant_id !== tenant.id) {
+    await sendWhatsAppMessage(ownerPhone, "Order tidak ditemukan.");
+    return;
+  }
+
+  const displayId = order.midtrans_id ?? order.id.slice(-6).toUpperCase();
+
+  try {
+    if (action === "mark_paid") {
+      await updateOrderStatus(order.id, "PAID", "PAID");
+      const items = await getOrderItemsByOrderId(order.id);
+      for (const item of items) {
+        await decrementProductStock(item.product_id, item.qty).catch((err) =>
+          console.error("[executeOwnerOrderAction] stock decrement failed:", err)
+        );
+      }
+      const customer = await getUserById(order.customer_user_id);
+      if (customer?.phone) {
+        await sendWhatsAppMessage(customer.phone, paymentSuccessMessage(displayId));
+        clearSession(tenant.id, customer.phone);
+      }
+      await sendWhatsAppMessage(ownerPhone, ownerMarkPaidMessage(displayId));
+
+    } else if (action === "mark_fulfilled") {
+      await updateOrderStatus(order.id, "FULFILLED");
+      const customer = await getUserById(order.customer_user_id);
+      if (customer?.phone) {
+        await sendWhatsAppMessage(customer.phone, fulfillmentNotificationMessage(displayId));
+      }
+      await sendWhatsAppMessage(ownerPhone, `✅ Order *${displayId}* ditandai *dikirim* — customer sudah dinotifikasi 🚚`);
+
+    } else if (action === "mark_done") {
+      await updateOrderStatus(order.id, "DONE");
+      const customer = await getUserById(order.customer_user_id);
+      if (customer?.phone) {
+        await sendWhatsAppMessage(customer.phone, orderDoneNotificationMessage(displayId));
+      }
+      await sendWhatsAppMessage(ownerPhone, `✅ Order *${displayId}* ditandai *selesai* — customer sudah dinotifikasi 🎉`);
+    }
+  } catch (err) {
+    console.error("[executeOwnerOrderAction] failed:", err);
+    await sendWhatsAppMessage(ownerPhone, "Gagal mengupdate order. Coba lagi ya 🙏");
   }
 }
 

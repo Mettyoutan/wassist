@@ -27,6 +27,11 @@ export const PAYMENT_REMINDER_BUTTONS = [
   { id: "cancel",    title: "❌ Batalkan" },
 ] as const;
 
+export const STATUS_QR_BUTTONS = [
+  { id: "resend_qr", title: "📱 Kirim Ulang QR"  },
+  { id: "cancel",    title: "❌ Batalkan Order" },
+] as const;
+
 export function orderConfirmationMessage(
     items: Array<{ name: string; qty: number; size?: string; subtotal: number }>,
     total: number,
@@ -458,4 +463,68 @@ export function productBrowseMessage(
   lines.push("📸 _detail [nama]_ → foto & info lengkap");
   lines.push("🛒 _[nama] [jumlah]_ → langsung pesan");
   return lines.join("\n").trimEnd();
+}
+
+// Inline type — structurally compatible dengan ListSection dari lib/whatsapp.ts
+type HelpSection = { title: string; rows: Array<{ id: string; title: string; description?: string }> };
+
+export const OWNER_HELP_SECTIONS: HelpSection[] = [
+  {
+    title: "Menu",
+    rows: [
+      { id: "help:laporan", title: "📊 Laporan",  description: "Omzet hari ini, minggu, bulan"    },
+      { id: "help:order",   title: "📋 Order",    description: "Lihat & update status order"       },
+      { id: "help:stok",    title: "📦 Stok",     description: "Cek & update stok produk"          },
+      { id: "help:produk",  title: "✏️ Produk",   description: "Harga, nonaktif, aktifkan produk"  },
+      { id: "help:toko",    title: "🏪 Toko",     description: "Buka & tutup toko"                 },
+    ],
+  },
+];
+
+export function ownerHelpCategoryText(category: string): string {
+  const texts: Record<string, string> = {
+    laporan: [
+      `📊 *Laporan Bisnis*`,
+      ``,
+      `• _"omzet hari ini"_ — penjualan hari ini`,
+      `• _"omzet minggu ini"_ — penjualan 7 hari`,
+      `• _"omzet bulan ini"_ — penjualan bulan ini`,
+    ].join("\n"),
+
+    order: [
+      `📋 *Order*`,
+      ``,
+      `• _"ada order apa?"_ — lihat semua order aktif`,
+      `• _"sudah dikirim"_ — tandai PAID → dikirim`,
+      `• _"order selesai"_ — tandai dikirim → selesai`,
+      `• _"tandai lunas"_ — konfirmasi bayar manual`,
+    ].join("\n"),
+
+    stok: [
+      `📦 *Stok*`,
+      ``,
+      `• _"cek stok"_ — lihat semua stok menipis`,
+      `• _"stok [nama]"_ — stok produk spesifik`,
+      `• _"stok [nama] jadi 20"_ — set stok baru`,
+      `• _"tambah stok [nama] 5"_ — tambah stok`,
+      `• _"batas stok [nama] 5"_ — set reorder point`,
+    ].join("\n"),
+
+    produk: [
+      `✏️ *Produk*`,
+      ``,
+      `• _"harga [nama] jadi 90000"_ — ubah harga`,
+      `• _"nonaktifkan [nama]"_ — sembunyikan dari katalog`,
+      `• _"aktifkan [nama]"_ — tampilkan kembali`,
+    ].join("\n"),
+
+    toko: [
+      `🏪 *Toko*`,
+      ``,
+      `• _"buka"_ — buka toko untuk menerima order`,
+      `• _"tutup"_ — tutup toko`,
+    ].join("\n"),
+  };
+
+  return texts[category] ?? `Ketik _"bantuan"_ untuk kembali ke menu.`;
 }
