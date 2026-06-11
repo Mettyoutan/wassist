@@ -81,13 +81,15 @@ export type WAUnknownMessage = WAMessageBase & {
 
 export type WAInteractiveMessage = WAMessageBase & {
   type: "interactive";
-  interactive: {
-    type: "button_reply";
-    button_reply: {
-      id: string;
-      title: string;
-    };
-  };
+  interactive:
+    | {
+        type: "button_reply";
+        button_reply: { id: string; title: string };
+      }
+    | {
+        type: "list_reply";
+        list_reply: { id: string; title: string; description?: string };
+      };
 };
 
 export type WAStatus = {
