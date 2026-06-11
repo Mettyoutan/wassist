@@ -1,6 +1,22 @@
 import { useState } from "react";
 import StatusBadge from "./StatusBadge";
 
+const AVATAR_PALETTES = [
+  { background: "#fee2e2", color: "#991b1b" },
+  { background: "#fef3c7", color: "#92400e" },
+  { background: "#d1fae5", color: "#065f46" },
+  { background: "#dbeafe", color: "#1e3a8a" },
+  { background: "#ede9fe", color: "#4c1d95" },
+  { background: "#fce7f3", color: "#831843" },
+  { background: "#e0f2fe", color: "#0c4a6e" },
+  { background: "#dcfce7", color: "#14532d" },
+];
+
+function avatarStyle(name: string) {
+  const idx = ((name.charCodeAt(0) || 0) + (name.charCodeAt(1) || 0)) % AVATAR_PALETTES.length;
+  return AVATAR_PALETTES[idx];
+}
+
 type Status = "pending" | "diproses" | "selesai" | "batal";
 
 interface OrderItem {
@@ -72,11 +88,11 @@ export default function OrderAccordion({
                 style={{ cursor: "pointer" }}
               >
                 <div className="d-flex align-items-center gap-2.5">
-                  <div 
-                    className="rounded-circle d-flex align-items-center justify-content-center bg-light text-secondary"
-                    style={{ width: "32px", height: "32px" }}
+                  <div
+                    className="rounded-circle d-flex align-items-center justify-content-center fw-bold flex-shrink-0"
+                    style={{ width: "38px", height: "38px", fontSize: "15px", ...avatarStyle(order.customer) }}
                   >
-                    <i className="bi bi-bag-check fs-6"></i>
+                    {order.customer.charAt(0).toUpperCase()}
                   </div>
                   <div>
                     <div className="fw-semibold text-dark" style={{ fontSize: "13px" }}>

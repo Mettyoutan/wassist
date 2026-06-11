@@ -1,7 +1,7 @@
-import { link } from "fs";
+"use client";
 import StatusBadge from "./StatusBadge";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
+
 type Status = "pending" | "diproses" | "selesai" | "batal";
 
 interface Order {
@@ -16,54 +16,71 @@ interface OrderTableProps {
   orders: Order[];
 }
 
+const AVATAR_PALETTES = [
+  { background: "#fee2e2", color: "#991b1b" },
+  { background: "#fef3c7", color: "#92400e" },
+  { background: "#d1fae5", color: "#065f46" },
+  { background: "#dbeafe", color: "#1e3a8a" },
+  { background: "#ede9fe", color: "#4c1d95" },
+  { background: "#fce7f3", color: "#831843" },
+  { background: "#e0f2fe", color: "#0c4a6e" },
+  { background: "#dcfce7", color: "#14532d" },
+];
+
+function avatarStyle(name: string) {
+  const idx = ((name.charCodeAt(0) || 0) + (name.charCodeAt(1) || 0)) % AVATAR_PALETTES.length;
+  return AVATAR_PALETTES[idx];
+}
+
 export default function OrderTable({ orders }: OrderTableProps) {
   const router = useRouter();
+
+  if (orders.length === 0) {
+    return (
+      <div className="card border-0 shadow-sm">
+        <div className="card-body text-center py-5 text-muted" style={{ fontSize: "13px" }}>
+          <i className="bi bi-inbox d-block fs-2 mb-2 opacity-50"></i>
+          Belum ada pesanan hari ini
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="card border-0 shadow-sm">
       <div className="card-body p-0">
-        <div className="d-flex justify-content-between align-items-center px-3 pt-3 pb-2">
-          <span className="fw-semibold" style={{ fontSize: "14px" }}>
-            Order List
-          </span>
-          <span
-            className="badge rounded-pill text-bg-light text-muted border"
-            style={{ fontSize: "11px" }}
+        {orders.map((order, i) => (
+          <div
+            key={order.order_id}
+            className="d-flex align-items-center gap-3 px-3 py-2"
+            style={{
+              borderBottom: i < orders.length - 1 ? "1px solid var(--color-border)" : "none",
+            }}
           >
-            <i className="bi bi-arrow-down me-1"></i>
-            {orders.length} Pesanan masuk
-          </span>
-        </div>
-        <table className="table table-sm mb-0" style={{ fontSize: "12px" }}>
-          <thead className="table-light">
-            <tr>
-              <th className="ps-3 py-2 fw-semibold text-muted">Nama Pelanggan</th>
-              <th className="py-2 fw-semibold text-muted">No. HP</th>
-              <th className="py-2 fw-semibold text-muted">Total</th>
-              <th className="py-2 fw-semibold text-muted">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {orders.map((order) => (
-              <tr key={order.order_id}>
-                <td className="ps-3 py-2">{order.customer}</td>
-                <td className="py-2 text-muted">{order.customer_phone}</td>
-                <td className="py-2">
-                  Rp {order.total.toLocaleString("id-ID")}
-                </td>
-                <td className="py-2">
-                  <StatusBadge status={order.status} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+            <div
+              className="rounded-circle d-flex align-items-center justify-content-center fw-bold flex-shrink-0"
+              style={{ width: "36px", height: "36px", fontSize: "14px", ...avatarStyle(order.customer) }}
+            >
+              {order.customer.charAt(0).toUpperCase()}
+            </div>
+            <div className="flex-grow-1" style={{ minWidth: 0 }}>
+              <div className="fw-semibold text-truncate" style={{ fontSize: "13px" }}>
+                {order.customer}
+              </div>
+              <div className="text-muted" style={{ fontSize: "11px" }}>
+                Rp {order.total.toLocaleString("id-ID")}
+              </div>
+            </div>
+            <StatusBadge status={order.status} />
+          </div>
+        ))}
         <div className="text-center py-2 border-top">
           <button
-            className="btn btn-sm btn-outline-secondary"
-            style={{ fontSize: "12px" }}
+            className="btn btn-sm"
+            style={{ fontSize: "12px", color: "var(--color-primary)", fontWeight: 500 }}
             onClick={() => router.push("/dashboard/orders")}
           >
-            <i className="bi bi-grid me-1"></i>Kelola Pesanan
+            Lihat semua pesanan →
           </button>
         </div>
       </div>

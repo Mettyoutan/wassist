@@ -162,12 +162,34 @@ export default function OrderManagement() {
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
-                  className={`btn btn-sm rounded-pill px-3 ${
-                    activeTab === tab ? "btn-dark" : "btn-outline-secondary"
-                  }`}
-                  style={{ fontSize: "12px", whiteSpace: "nowrap" }}
+                  className="btn btn-sm rounded-pill px-3"
+                  style={{
+                    fontSize: "12px",
+                    whiteSpace: "nowrap",
+                    transition: "all 0.15s",
+                    background: activeTab === tab ? "var(--color-primary)" : "transparent",
+                    color: activeTab === tab ? "#fff" : "var(--color-text-muted)",
+                    border: `1px solid ${activeTab === tab ? "var(--color-primary)" : "var(--color-border)"}`,
+                    fontWeight: activeTab === tab ? 600 : 400,
+                  }}
                 >
                   {tabLabels[tab]}
+                  {statusCount[tab] > 0 && (
+                    <span
+                      className="ms-1"
+                      style={{
+                        fontSize: "9px",
+                        fontWeight: 700,
+                        background: activeTab === tab ? "rgba(255,255,255,0.25)" : "var(--color-border)",
+                        color: activeTab === tab ? "#fff" : "var(--color-text-muted)",
+                        borderRadius: "10px",
+                        padding: "1px 5px",
+                        display: "inline-block",
+                      }}
+                    >
+                      {statusCount[tab]}
+                    </span>
+                  )}
                 </button>
               ))}
             </div>

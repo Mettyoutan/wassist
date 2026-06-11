@@ -59,7 +59,7 @@ export default function CreateProduct() {
         }
       }
 
-      await fetch("/api/products", {
+      const res = await fetch("/api/products", {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -67,10 +67,12 @@ export default function CreateProduct() {
           description: form.description.trim() || null,
           price:       Number(form.price),
           stock:       Number(form.stock) || 0,
+          unit:        "pcs",
           category:    form.category || null,
           image_url,
         }),
       })
+      if (!res.ok) throw new Error("Failed to create product")
       router.push('/dashboard/products')
       router.refresh()
     } catch {

@@ -32,7 +32,8 @@ INTENT (pilih tepat satu):
 
 ATURAN OUTPUT:
 - items: isi HANYA jika intent = order_new. Intent lain → array kosong [].
-- product_index: nomor urut produk dari daftar "PRODUK TERSEDIA" (1-based integer). Bukan nama, bukan UUID.
+- product_index (TOP LEVEL): isi HANYA jika intent = product_detail. Nomor urut produk dari daftar "PRODUK TERSEDIA" yang customer tanya (1-based integer). Intent lain → kosongkan.
+- product_index (DALAM items): nomor urut produk dari daftar "PRODUK TERSEDIA" (1-based integer). Bukan nama, bukan UUID.
 - qty: angka positif. Integer untuk satuan (pcs), desimal untuk berat/volume (kg, L).
 - size: ukuran jika disebutkan (S/M/L/XL/XXL atau angka). Default "".
 - notes: catatan lain. Default "".
@@ -65,6 +66,7 @@ ATURAN OUTPUT:
             required: ["product_index"],
           },
         },
+        product_index: { type: SchemaType.INTEGER },
         confidence: { type: SchemaType.NUMBER },
       },
       required: ["intent", "confidence"],

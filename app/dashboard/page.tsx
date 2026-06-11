@@ -19,6 +19,12 @@ type OrderRow = {
   status: "pending" | "diproses" | "selesai" | "batal";
 };
 
+function fmtRevenue(n: number): string {
+  if (n >= 1_000_000) return `Rp ${(n / 1_000_000).toFixed(1).replace(".0", "")} jt`;
+  if (n >= 1_000) return `Rp ${Math.round(n / 1_000)} rb`;
+  return `Rp ${n.toLocaleString("id-ID")}`;
+}
+
 export default function DashboardPage() {
   const [kpi, setKpi] = useState<KpiData | null>(null);
   const [orders, setOrders] = useState<OrderRow[]>([]);
@@ -46,75 +52,99 @@ export default function DashboardPage() {
     fetchData();
   }, []);
 
-  const now = new Intl.DateTimeFormat("id-ID", {
-    dateStyle: "long",
-    timeStyle: "short",
-  }).format(new Date());
+  const h = new Date().getHours();
+  const greeting = h < 12 ? "Selamat Pagi" : h < 17 ? "Selamat Siang" : "Selamat Malam";
+  const dateStr = new Intl.DateTimeFormat("id-ID", { dateStyle: "full" }).format(new Date());
 
   return (
-    <div className="pb-4">
-      {/* ── Ringkasan Penjualan ── */}
-      <div className="card border-0 shadow-sm">
-        <div className="card-body p-3">
-          <div className="d-flex justify-content-between align-items-start mb-2">
-            <div>
-              <div className="fw-semibold" style={{ fontSize: "14px" }}>
-                Ringkasan Penjualan -
-              </div>
-              <div className="fw-semibold text-success" style={{ fontSize: "14px" }}>
-                {loading ? "Memuat..." : (kpi?.tenantName ?? "Toko")}
-              </div>
-              <small className="text-muted">📅 {now}</small>
-            </div>
-            {!loading && (kpi?.pendingCount ?? 0) > 0 && (
-              <span className="badge rounded-pill text-bg-warning" style={{ fontSize: "10px" }}>
-                🔥 {kpi!.pendingCount} pesanan menunggu
-              </span>
-            )}
+    <div style={{ background: "var(--color-bg)" }}>
+      {/* ── Hero Banner ── */}
+      <div
+        style={{
+          background: "linear-gradient(135deg, #075E54 0%, #0A7A6E 55%, #128C7E 100%)",
+          padding: "20px 16px 36px",
+          color: "#fff",
+        }}
+      >
+        <p className="mb-1" style={{ fontSize: "11px", opacity: 0.7, letterSpacing: "0.02em" }}>
+          {dateStr}
+        </p>
+        <h1 className="fw-bold mb-1" style={{ fontSize: "20px", letterSpacing: "-0.01em" }}>
+          {greeting}, {loading ? "..." : (kpi?.tenantName ?? "Toko Anda")}!
+        </h1>
+        <p className="mb-0" style={{ fontSize: "12px", opacity: 0.75 }}>
+          WAssist · Bot aktif 24/7 🤖
+        </p>
+        {!loading && (kpi?.pendingCount ?? 0) > 0 && (
+          <div
+            className="mt-2 d-inline-flex align-items-center gap-1 px-2 py-1 rounded-pill"
+            style={{ background: "rgba(255,255,255,0.18)", fontSize: "11px", fontWeight: 600 }}
+          >
+            <span>🔥</span>
+            <span>{kpi!.pendingCount} pesanan menunggu</span>
           </div>
-          <div className="row g-2 mt-1">
-            <div className="col-6">
-              <KPICard
-                title="Omzet hari ini"
-                value={loading ? "..." : `Rp ${(kpi?.totalRevenue ?? 0).toLocaleString("id-ID")}`}
-                change={0}
-                icon="bi-graph-up"
-              />
-            </div>
-            <div className="col-6">
-              <KPICard
-                title="Total Pesanan"
-                value={loading ? "..." : `${kpi?.orderCount ?? 0} Pesanan`}
-                change={0}
-                icon="bi-bag"
-              />
-            </div>
+        )}
+      </div>
+
+      {/* ── KPI Cards — 3-col, overlapping hero ── */}
+      <div className="row g-2 px-3" style={{ marginTop: "-20px" }}>
+        <div className="col-4" style={{ overflow: "hidden" }}>
+          <div style={{ borderRadius: "0.375rem", boxShadow: "0 2px 10px rgba(0,0,0,0.12)" }}>
+            <KPICard
+              title="Omzet"
+              value={loading ? "..." : fmtRevenue(kpi?.totalRevenue ?? 0)}
+              change={0}
+              icon="bi-graph-up"
+            />
+          </div>
+        </div>
+        <div className="col-4" style={{ overflow: "hidden" }}>
+          <div style={{ borderRadius: "0.375rem", boxShadow: "0 2px 10px rgba(0,0,0,0.12)" }}>
+            <KPICard
+              title="Pesanan"
+              value={loading ? "..." : String(kpi?.orderCount ?? 0)}
+              change={0}
+              icon="bi-bag"
+            />
+          </div>
+        </div>
+        <div className="col-4" style={{ overflow: "hidden" }}>
+          <div style={{ borderRadius: "0.375rem", boxShadow: "0 2px 10px rgba(0,0,0,0.12)" }}>
+            <KPICard
+              title="Pending"
+              value={loading ? "..." : String(kpi?.pendingCount ?? 0)}
+              change={0}
+              icon="bi-clock"
+            />
           </div>
         </div>
       </div>
 
-      {/* ── Order List Table ── */}
+      {/* ── Pesanan Terbaru ── */}
+      <div className="px-3 mt-4 mb-2">
+        <span className="fw-semibold" style={{ fontSize: "14px" }}>Pesanan Terbaru</span>
+      </div>
       {loading ? (
         <div className="text-center py-4">
           <div className="spinner-border spinner-border-sm text-secondary" role="status" />
         </div>
       ) : (
-        <OrderTable orders={orders.slice(0, 5)} />
+        <div className="px-3">
+          <OrderTable orders={orders.slice(0, 5)} />
+        </div>
       )}
 
       {/* ── Insight Cards ── */}
-      <div className="row g-2">
+      <div className="row g-2 px-3 mt-3">
         <div className="col-6">
           <div className="card border-0 shadow-sm h-100">
             <div className="card-body p-3">
               <div className="d-flex align-items-center gap-1 mb-2">
                 <span style={{ fontSize: "16px" }}>✨</span>
-                <span className="fw-semibold" style={{ fontSize: "13px" }}>
-                  Efisiensi Operasional
-                </span>
+                <span className="fw-semibold" style={{ fontSize: "13px" }}>AI Aktif</span>
               </div>
               <p className="text-muted mb-0" style={{ fontSize: "11px", lineHeight: "1.5" }}>
-                Gemini AI membantu customer secara otomatis. Cek tab Pesanan untuk update terbaru.
+                Gemini AI membantu customer 24/7 secara otomatis.
               </p>
             </div>
           </div>
@@ -124,48 +154,21 @@ export default function DashboardPage() {
             <div className="card-body p-3">
               <div className="d-flex align-items-center gap-1 mb-2">
                 <span style={{ fontSize: "16px" }}>📊</span>
-                <span className="fw-semibold" style={{ fontSize: "13px" }}>
-                  Analitik Penjualan
-                </span>
+                <span className="fw-semibold" style={{ fontSize: "13px" }}>Analitik</span>
               </div>
               <p className="text-muted mb-0" style={{ fontSize: "11px", lineHeight: "1.5" }}>
-                Lihat top produk dan tren omzet di tab Analitik.
+                Lihat tren omzet dan top produk di tab Analitik.
               </p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* ── Bantuan ── */}
-      <div className="card border-0 shadow-sm">
-        <div className="card-body p-3">
-          <div className="d-flex gap-2 align-items-start mb-2">
-            <span style={{ fontSize: "20px" }}>💬</span>
-            <div>
-              <div className="fw-semibold" style={{ fontSize: "13px" }}>
-                Butuh bantuan atau ada pertanyaan?
-              </div>
-              <small className="text-muted">Tim WAssist siap membantu</small>
-            </div>
-          </div>
-          <button className="btn btn-success w-100" style={{ fontSize: "13px" }}>
-            <i className="bi bi-whatsapp me-2"></i>Minta Bantuan via WhatsApp
-          </button>
-        </div>
-      </div>
-
       {/* ── Footer ── */}
-      <div className="text-center py-2">
-        <small className="text-muted d-block mb-2" style={{ fontSize: "11px", lineHeight: "1.6" }}>
-          Solusi AI WhatsApp Assistant yang dirancang untuk membantu UMKM
-          meningkatkan efisiensi operasional, pelayanan pelanggan, dan
-          pengelolaan bisnis harian.
+      <div className="text-center py-4">
+        <small className="text-muted" style={{ fontSize: "11px" }}>
+          WAssist · Solusi AI WhatsApp untuk UMKM Indonesia
         </small>
-        <div className="d-flex justify-content-center gap-3 mb-3">
-          <i className="bi bi-instagram text-muted"></i>
-          <i className="bi bi-twitter-x text-muted"></i>
-          <i className="bi bi-tiktok text-muted"></i>
-        </div>
       </div>
     </div>
   );

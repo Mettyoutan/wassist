@@ -19,16 +19,17 @@ export async function GET() {
   const soldMap = new Map(kpiToday.topProducts.map((p) => [p.name, p.qtySold]));
 
   const result = products.map((p) => ({
-    id:        p.id,
-    name:      p.name,
-    description: p.description,
-    category: p.category,
-    stock:     p.stock,
-    unit:      p.unit,
-    price:     p.price,
-    soldToday: soldMap.get(p.name) ?? 0,
-    image:     p.image_url ?? "",
-    status:    toStockStatus(p.stock, p.reorder_point),
+    id:            p.id,
+    name:          p.name,
+    description:   p.description,
+    category:      p.category,
+    stock:         p.stock,
+    unit:          p.unit,
+    price:         p.price,
+    reorder_point: p.reorder_point,
+    soldToday:     soldMap.get(p.name) ?? 0,
+    image:         p.image_url ?? "",
+    status:        toStockStatus(p.stock, p.reorder_point),
   }));
 
   return NextResponse.json({ products: result });
@@ -63,8 +64,8 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ success: true, id: result.id }, { status: 201 });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[API Products POST] error:", err);
-    return NextResponse.json({ error: err.message || "Failed to create product" }, { status: 500 });
+    return NextResponse.json({ error: err instanceof Error ? err.message : "Failed to create product" }, { status: 500 });
   }
 }
