@@ -14,7 +14,10 @@ import { getProductsByTenantAll,
          decrementProductStock }      from "@/server/db";
 import { sendWhatsAppMessage,
          sendListMessage,
-         sendInteractiveButtons }     from "@/lib/whatsapp";
+         sendInteractiveButtons,
+         uploadWhatsAppMedia,
+         sendWhatsAppImageMessage }   from "@/lib/whatsapp";
+import { buildRevenueChartUrl }       from "@/lib/quickchart";
 import { fulfillmentNotificationMessage,
          orderDoneNotificationMessage,
          ownerMarkPaidMessage,
@@ -68,8 +71,26 @@ export async function handleOwnerCommand(
 
     // ── ANALYTICS (read only, langsung balas) ──────────────────────────────
     case "get_revenue": {
-      const data = await queryRevenueData(tenant.id, parsed.period ?? "hari ini");
-      const msg  = await generateRevenueResponse(data);
+      const period = parsed.period ?? "hari ini";
+      const data   = await queryRevenueData(tenant.id, period);
+      const msg    = await generateRevenueResponse(data);
+
+      // Send chart if any revenue in trend points
+      if (data.trendPoints.some(p => p.revenue > 0)) {
+        try {
+          const chartUrl = buildRevenueChartUrl(data.trendPoints, data.period);
+          const res      = await fetch(chartUrl);
+          if (res.ok) {
+            const buf     = Buffer.from(await res.arrayBuffer());
+            const mediaId = await uploadWhatsAppMedia(buf, "image/png");
+            await sendWhatsAppImageMessage(ownerPhone, mediaId, `📊 ${msg}`);
+            break; // chart sent with caption — skip plain text
+          }
+        } catch (err) {
+          console.warn("[owner/get_revenue] chart failed, fallback to text:", err);
+        }
+      }
+
       await sendWhatsAppMessage(ownerPhone, msg);
       break;
     }
